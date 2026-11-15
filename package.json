@@ -11,6 +11,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@fontsource/lora": "^5.3.0",
     "@tauri-apps/api": "^2.12.4"
   },
   "devDependencies": {

@@ -1,42 +1,67 @@
+/* Estilo «Papel»: libreta de notas. Fondo crema, Lora (serif), tinta azul,
+   margen rojo y lo urgente marcado con fosforito. De noche, papel oscuro
+   con tinta clara. */
+
+/* Lora va dentro de la app (sin red). Se declara a mano para incluir solo
+   los .woff2: los CSS de @fontsource añaden un .woff de respaldo que
+   WebView2 y WebKitGTK no necesitan. Licencia OFL 1.1. */
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../node_modules/@fontsource/lora/files/lora-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../node_modules/@fontsource/lora/files/lora-latin-600-normal.woff2") format("woff2");
+}
+
 :root {
-  --bg: #fbfbfc;
-  --bg-input: #ffffff;
-  --bg-hover: #f1f1f4;
-  --bg-active: #e4e4ea;
-  --fg: #1d1d20;
-  --fg-muted: #6b6b75;
-  --border: #e2e2e7;
-  --accent: #3b6ef5;
-  --on-accent: #ffffff;
-  --danger: #c93636;
-  --urgent: #d9480f;
-  --urgent-bg: #fff3ea;
-  --urgent-bg-hover: #ffe8d6;
-  --shadow-drag: 0 4px 14px rgb(0 0 0 / 0.14), 0 0 0 1px var(--border);
+  --bg: #fbf6ea;
+  --bg-input: #fffdf6;
+  --bg-hover: #f4edda;
+  --bg-active: #e9dfc9;
+  --fg: #2d2a24;
+  --fg-muted: #8b8172;
+  --border: #e6dbc3;
+  --accent: #2f4b7c;
+  --on-accent: #fbf6ea;
+  --danger: #b3261e;
+  --urgent: #b3261e;
+  --urgent-bg: #fff0a0;
+  --urgent-bg-hover: #ffe97a;
+  --margin-line: #e8a9a3;
+  --pill: #ddd1b6;
+  --shadow-drag: 0 4px 14px rgb(70 50 20 / 0.16), 0 0 0 1px var(--border);
 
   color-scheme: light dark;
-  font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system,
-    "Cantarell", "Ubuntu", sans-serif;
+  font-family: "Lora", Georgia, "Times New Roman", serif;
   font-size: 15px;
-  line-height: 1.4;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1e1e22;
-    --bg-input: #28282e;
-    --bg-hover: #26262b;
-    --bg-active: #34343b;
-    --fg: #ececf1;
-    --fg-muted: #9a9aa5;
-    --border: #34343c;
-    --accent: #6d93ff;
-    --on-accent: #10131c;
-    --danger: #ff6b6b;
-    --urgent: #ff8a4c;
-    --urgent-bg: #33261f;
-    --urgent-bg-hover: #3d2c23;
+    --bg: #1f1c17;
+    --bg-input: #26221c;
+    --bg-hover: #2a261f;
+    --bg-active: #353026;
+    --fg: #ece3cf;
+    --fg-muted: #9c917c;
+    --border: #3a342a;
+    --accent: #8fb0e8;
+    --on-accent: #1f1c17;
+    --danger: #ff8a7a;
+    --urgent: #ffb35c;
+    --urgent-bg: #4a3f12;
+    --urgent-bg-hover: #574a15;
+    --margin-line: #6b3b36;
+    --pill: #4a4234;
     --shadow-drag: 0 4px 16px rgb(0 0 0 / 0.5), 0 0 0 1px var(--border);
   }
 }

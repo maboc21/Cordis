@@ -127,7 +127,7 @@
     width: 36px;
     height: 4px;
     border-radius: 2px;
-    background: var(--border);
+    background: var(--pill);
     transition: background 120ms ease;
   }
 
@@ -144,6 +144,10 @@
     min-height: 0;
     overflow-y: auto;
     padding: 0 8px 8px;
+    /* Margen rojo de la libreta, entre el asa de arrastre y la casilla. Las
+       filas son transparentes para que se vea. */
+    background: linear-gradient(var(--margin-line), var(--margin-line)) 26px 0 / 1.5px 100%
+      no-repeat;
   }
 
   footer {

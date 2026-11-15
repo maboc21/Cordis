@@ -39,7 +39,8 @@ src/                     Svelte 5 + TypeScript, sin SvelteKit ni librerías de U
   main.ts                monta App o ReminderPopup según la ventana; en dev y fuera de Tauri
                          instala el backend simulado (el popup se ve en /#reminder)
   App.svelte             entrada + lista desplazable + pie (contadores / errores)
-  app.css                variables de color (claro/oscuro con prefers-color-scheme)
+  app.css                estilo «Papel»: @font-face de Lora y variables de color (claro/oscuro
+                         con prefers-color-scheme)
   components/
     TaskInput.svelte     campo de nueva tarea (Enter); se enfoca al enfocar la ventana
     TaskList.svelte      pendientes (reordenables) + sección «Hechas» plegable
@@ -127,6 +128,8 @@ src-tauri/
 
 ## Decisiones tomadas
 
+- **Estilo visual «Papel»** (elegido por el usuario entre seis propuestas): libreta de notas con fondo crema, tipografía **Lora** (serif), tinta azul (`--accent`), un margen rojo vertical en la lista (`--margin-line`, dibujado como fondo de `.scroll`; por eso las filas son transparentes y solo la arrastrada lleva fondo) y las urgentes marcadas con fosforito (`--urgent-bg`). El campo de nueva tarea es solo una línea de tinta. De noche, «papel oscuro» con tinta clara. Todos los colores son variables de `app.css`; los componentes no llevan colores fijos.
+- **Lora va dentro de la app** (paquete `@fontsource/lora`, licencia OFL 1.1). Se declara a mano en `app.css` apuntando solo a los `.woff2` latinos de 400 y 600 (+43 KB); los CSS del paquete añadirían copias `.woff` que no hacen falta. Si se necesita otro peso o la cursiva, añadir su `@font-face` igual.
 - **Ligereza ante todo.** Nada de frameworks de UI ni dependencias pesadas. Perfil release con `opt-level="s"`, LTO, `codegen-units=1`, `panic="abort"` y `strip`.
 - **TypeScript 6**, no 7: `svelte-check` 4 todavía no admite TS 7.
 - **SQLite desde Rust** con `rusqlite` (feature `bundled`, sin depender de la librería del sistema). Una única `Mutex<Connection>` compartida por comandos y planificador, con WAL.

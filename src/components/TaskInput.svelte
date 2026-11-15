@@ -41,20 +41,22 @@
 />
 
 <style>
+  /* Papel: solo una línea de tinta debajo, como escribir en la libreta. */
   .new-task {
-    margin: 0 12px 6px;
-    padding: 12px 14px;
+    margin: 0 16px 8px;
+    padding: 10px 2px 8px;
     font: inherit;
-    font-size: 1.1rem;
+    font-size: 1.15rem;
     color: var(--fg);
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    background: transparent;
+    border: none;
+    border-bottom: 1.5px solid var(--border);
+    border-radius: 0;
     outline: none;
   }
 
   .new-task:focus {
-    border-color: var(--accent);
+    border-bottom-color: var(--accent);
   }
 
   .new-task::placeholder {

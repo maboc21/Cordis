@@ -254,8 +254,9 @@
     align-items: flex-start;
     gap: 6px;
     padding: 6px 8px 6px 2px;
-    border-radius: 6px;
-    background: var(--bg);
+    border-radius: 3px;
+    /* Transparente para que se vea el margen rojo de la lista. */
+    background: transparent;
   }
 
   .task:hover,
@@ -265,9 +266,9 @@
 
   /* --- Urgente --- */
 
+  /* Papel: lo urgente va marcado con fosforito. */
   .task.urgent {
     background: var(--urgent-bg);
-    box-shadow: inset 3px 0 0 var(--urgent);
   }
 
   .task.urgent:hover,
@@ -349,10 +350,10 @@
   }
 
   .box {
-    width: 18px;
-    height: 18px;
+    width: 17px;
+    height: 17px;
     border: 1.5px solid var(--fg-muted);
-    border-radius: 5px;
+    border-radius: 3px;
     position: relative;
   }
 
