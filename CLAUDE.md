@@ -6,7 +6,7 @@ Guía para trabajar en este repositorio con Claude Code.
 
 ## Qué es
 
-Organizador de tareas de escritorio, ligero y solo local (sin red, sin cuentas, sin sincronización). Ventana flotante tipo Spotlight que se abre con un atajo global, vive en la bandeja y lanza recordatorios como notificaciones nativas.
+Organizador de tareas de escritorio, ligero y solo local (sin red, sin cuentas, sin sincronización). Ventana flotante tipo Spotlight que se abre con un atajo global, vive en la bandeja y avisa de los recordatorios con un popup propio que no se cierra solo.
 
 Plataformas: Windows primero; el código debe funcionar también en Linux (X11 y Wayland).
 
@@ -36,7 +36,8 @@ Requisitos en Linux: ver los prerrequisitos de Tauri 2 (`libwebkit2gtk-4.1-dev`,
 
 ```
 src/                     Svelte 5 + TypeScript, sin SvelteKit ni librerías de UI
-  main.ts                monta App; en dev y fuera de Tauri instala el backend simulado
+  main.ts                monta App o ReminderPopup según la ventana; en dev y fuera de Tauri
+                         instala el backend simulado (el popup se ve en /#reminder)
   App.svelte             entrada + lista desplazable + pie (contadores / errores)
   app.css                variables de color (claro/oscuro con prefers-color-scheme)
   components/
@@ -45,6 +46,7 @@ src/                     Svelte 5 + TypeScript, sin SvelteKit ni librerías de U
     TaskItem.svelte      casilla, título editable, notas, borrar, asa de arrastre
     Settings.svelte      vista de Ajustes: grabador del atajo global, aviso de Wayland
     ReminderPicker.svelte  atajos rápidos (en 1 h, esta tarde, mañana, lunes) + datetime-local
+    ReminderPopup.svelte   interfaz del popup de recordatorios (ventana `reminder`)
   lib/dates.ts           ms ↔ datetime-local, «hoy 18:00» / «mañana 9:00», presets
   lib/shortcut.ts        KeyboardEvent → «Ctrl+Alt+Space» y su presentación en español
   lib/api.ts             envoltorios tipados de invoke(); la UI solo habla con Rust por aquí
@@ -63,7 +65,8 @@ src-tauri/
   src/window.rs          mostrar/ocultar/toggle, ocultar al perder el foco, cerrar = ocultar
   src/tray.rs            icono de bandeja y menú Mostrar / Ajustes / Salir
   src/shortcut.rs        plugin de atajo global, parse() con validación, registro, is_wayland()
-  src/reminders.rs       planificador: plan()/notices()/sleep_ms() puros y testeados + bucle tokio
+  src/reminders.rs       planificador: plan()/sleep_ms() puros y testeados + bucle tokio
+  src/popup.rs           ventana `reminder`: cola de avisos, creación sin foco, esquina inferior derecha
   src/backup.rs          formato JSON de la copia, export/parse/import con tests
   src/db/mod.rs          Db (Mutex<Connection>), open(), pragmas, now_ms()
   src/db/migrations.rs   lista versionada de SQL + PRAGMA user_version
@@ -81,10 +84,15 @@ src-tauri/
 
 ### Recordatorios
 
-- Las notificaciones programadas del plugin no funcionan en escritorio: `reminders.rs` tiene un bucle propio en `tauri::async_runtime` (tokio). Cada vuelta (`tick`) lee `tasks::pending_reminders`, calcula con `plan(pendientes, now)` qué está vencido y cuál es el siguiente, marca los vencidos con `mark_reminded` **antes** de notificar (mejor perder un aviso que repetirlo), los notifica y emite `tasks-changed` para que la interfaz recargue.
+- `reminders.rs` tiene un bucle propio en `tauri::async_runtime` (tokio). Cada vuelta (`tick`) lee `tasks::pending_reminders`, calcula con `plan(pendientes, now)` qué está vencido y cuál es el siguiente, marca los vencidos con `mark_reminded` **antes** de mostrarlos (mejor perder un aviso que repetirlo), los manda al popup (`popup::push`) y emite `tasks-changed` para que la lista recargue.
+- **Avisos en un popup propio, no en notificaciones del sistema** (decisión del usuario: las notificaciones se cierran solas y pasan desapercibidas). Se quitó `tauri-plugin-notification`.
+- **Popup** (`popup.rs` + `ReminderPopup.svelte`): ventana `reminder` sin bordes, siempre encima, fuera de la barra de tareas, en la esquina inferior derecha del área de trabajo (`Monitor::work_area`, sin la barra de tareas) del monitor principal. Se crea **sin foco** (`focused(false)`) para no quitarle el teclado al usuario, y se destruye al cerrarse: no existe mientras no hay avisos. Cola de ids en `PopupState`; si llegan avisos con el popup abierto se añaden y se emite `popup-updated`. Cada tarea tiene «Hecha» y «Posponer» (10 min, 1 h, mañana 9:00); abajo, «Abrir la lista»; arriba, cerrar. Se cierra solo cuando la cola se vacía. La interfaz mide su contenido con un `ResizeObserver` y llama a `popup_resize`; Rust limita la altura (120-480 px) y la recoloca para que crezca hacia arriba.
+- `set_task_done` y `delete_task` llaman a `popup::refresh`, que quita del popup lo que ya no está pendiente (o lo cierra). Las acciones del popup emiten `tasks-changed` para que la lista principal recargue.
+- La ventana `reminder` está en la capability `default` junto a `main` (necesita escuchar eventos).
+- `main.ts` lee la etiqueta de la ventana de `__TAURI_INTERNALS__.metadata` en vez de importar `@tauri-apps/api/window`, que añade ~20 kB al bundle.
 - Espera con `select!` entre `sleep(sleep_ms(next))` y `Notify`. `sleep_ms` limita el sueño a 60 s porque el reloj de tokio es monótono y no ve cambios de hora ni (según el equipo) la suspensión; sin recordatorios pendientes no despierta nunca.
 - **Hay que llamar a `Scheduler::reschedule()`** desde cualquier comando que pueda cambiar el próximo recordatorio (`set_task_reminder`, `set_task_done`, `delete_task`, `import_tasks`). `Notify::notify_one` guarda el permiso si el bucle no está esperando, así que no se pierden avisos.
-- La primera vuelta es inmediata al arrancar: avisa lo que venció con la app cerrada. Más de 3 a la vez se agrupan en una notificación («N recordatorios» con hasta 5 títulos).
+- La primera vuelta es inmediata al arrancar: avisa en el popup lo que venció con la app cerrada (también con `--hidden`).
 - Al desmarcar una tarea hecha cuyo recordatorio ya pasó y no se avisó, se avisa en ese momento.
 - La interfaz no deja poner un recordatorio en el pasado (el backend sí lo acepta, para importar).
 
@@ -130,7 +138,7 @@ src-tauri/
 - **Esc**: en Ajustes vuelve a la lista; en la lista oculta la ventana. Los Esc con significado propio (editar, notas, arrastrar, grabar atajo) hacen `preventDefault` + `stopPropagation`.
 - **Arrastrar para reordenar** con pointer events hechos a mano (el drag & drop HTML5 choca con `dragDropEnabled` de Tauri en Windows y falla en WebKitGTK).
 - **Ajustes** en una tabla clave/valor `settings`, y en la misma ventana como otra vista (no una segunda ventana, para ahorrar RAM).
-- **Planificador de recordatorios**: tarea tokio (runtime de Tauri) con `select!` entre `sleep_until(próximo)` y un `Notify` que despiertan los comandos que cambian tareas. `next_reminder()` es pura y tiene tests. Más de 3 vencidos al arrancar se agrupan en una notificación.
+- **Planificador de recordatorios**: tarea tokio (runtime de Tauri) con `select!` entre `sleep(próximo)` y un `Notify` que despiertan los comandos que cambian tareas. `plan()` es pura y tiene tests. Los avisos van al popup (ver «Recordatorios»).
 - **Autoarranque** con `--hidden`: arranca en la bandeja sin mostrar la ventana.
 - **Exportar/importar** con `tauri-plugin-dialog`, llamado desde Rust. Importar **reemplaza** todas las tareas, previa confirmación.
 - **Instalador de Windows** en español (`bundle.windows.wix.language = es-ES`).
@@ -145,7 +153,7 @@ src-tauri/
 - Linux: los clics en el icono de la bandeja no llegan a la app (AppIndicator); solo funciona el menú.
 - Windows: si la ventana se muestra desde otro proceso (`--toggle`), Windows puede negarle el foco (protección contra robo de foco). Con el atajo y la bandeja no pasa.
 - Por comprobar en la app real: si el desplegable nativo del `datetime-local` quita el foco a la ventana, se ocultaría al abrirlo (los diálogos de archivo ya pausan el ocultado).
-- Windows: en desarrollo las notificaciones salen a nombre de PowerShell; con la app instalada (.msi), con su nombre e icono.
+- Wayland: el compositor no deja colocar el popup en la esquina; aparecerá donde decida.
 - `.AppImage` y `.deb` se generan en Linux (o CI); no hay compilación cruzada desde Windows.
 
 ## Forma de trabajar

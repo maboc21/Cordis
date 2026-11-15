@@ -1,22 +1,21 @@
 //! Planificador de recordatorios.
 //!
-//! En escritorio, las notificaciones programadas del plugin no funcionan, así
-//! que hay un bucle propio en tokio: calcula el próximo recordatorio, duerme
-//! hasta entonces y avisa. Se recalcula cuando cambian las tareas
-//! (`Scheduler::reschedule`). Los que vencieron con la app cerrada se avisan en
-//! la primera vuelta, al arrancar.
+//! Un bucle propio en tokio: calcula el próximo recordatorio, duerme hasta
+//! entonces y lo muestra en el popup (`popup.rs`), que no se cierra solo.
+//! Se recalcula cuando cambian las tareas (`Scheduler::reschedule`). Los que
+//! vencieron con la app cerrada se avisan en la primera vuelta, al arrancar.
 //!
-//! La lógica (`plan` y `notices`) es pura y está testeada; `tick` solo la
-//! conecta con la base de datos y las notificaciones.
+//! La lógica (`plan` y `sleep_ms`) es pura y está testeada; `tick` solo la
+//! conecta con la base de datos y el popup.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Notify;
 
 use crate::db::{self, tasks, tasks::Task, Db};
+use crate::popup;
 
 /// Como mucho se duerme esto seguido aunque el próximo aviso esté más lejos.
 /// El reloj de tokio es monótono: no ve cambios de hora del sistema ni, en
@@ -24,11 +23,6 @@ use crate::db::{self, tasks, tasks::Task, Db};
 /// mirar el reloj de pared lo corrige con un coste despreciable. Sin
 /// recordatorios pendientes no se despierta nunca.
 const MAX_SLEEP_MS: i64 = 60_000;
-
-/// A partir de cuántos avisos simultáneos se agrupan en una sola notificación.
-const GROUP_THRESHOLD: usize = 3;
-/// Cuántos títulos se listan en la notificación agrupada.
-const GROUP_LISTED: usize = 5;
 
 // --- Lógica pura ---
 
@@ -61,38 +55,6 @@ pub fn plan(pending: &[Task], now: i64) -> Plan {
 /// Cuánto dormir hasta la próxima vuelta (`None`: hasta que cambien las tareas).
 pub fn sleep_ms(next: Option<i64>, now: i64) -> Option<u64> {
     next.map(|at| (at - now).clamp(0, MAX_SLEEP_MS) as u64)
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Notice {
-    pub title: String,
-    pub body: String,
-}
-
-/// Notificaciones para los recordatorios vencidos: una por tarea, o una sola
-/// agrupada si son más de `GROUP_THRESHOLD` (p. ej. al arrancar tras días
-/// con la app cerrada).
-pub fn notices(due: &[Task]) -> Vec<Notice> {
-    if due.len() <= GROUP_THRESHOLD {
-        return due
-            .iter()
-            .map(|t| Notice {
-                title: t.title.clone(),
-                body: t
-                    .notes
-                    .as_deref()
-                    .and_then(|n| n.lines().next())
-                    .unwrap_or("Recordatorio")
-                    .to_owned(),
-            })
-            .collect();
-    }
-    let mut lines: Vec<String> =
-        due.iter().take(GROUP_LISTED).map(|t| format!("• {}", t.title)).collect();
-    if due.len() > GROUP_LISTED {
-        lines.push(format!("y {} más", due.len() - GROUP_LISTED));
-    }
-    vec![Notice { title: format!("{} recordatorios", due.len()), body: lines.join("\n") }]
 }
 
 // --- Bucle ---
@@ -142,7 +104,7 @@ fn tick(app: &AppHandle) -> Option<u64> {
         };
         let plan = plan(&pending, now);
         let ids: Vec<i64> = plan.due.iter().map(|t| t.id).collect();
-        // Se marcan antes de notificar: si algo falla, mejor perder un aviso
+        // Se marcan antes de mostrarlos: si algo falla, mejor perder un aviso
         // que repetirlo en bucle cada minuto.
         if let Err(e) = tasks::mark_reminded(&mut conn, &ids) {
             eprintln!("Recordatorios: {e}");
@@ -151,11 +113,8 @@ fn tick(app: &AppHandle) -> Option<u64> {
     };
 
     if !plan.due.is_empty() {
-        for n in notices(&plan.due) {
-            if let Err(e) = app.notification().builder().title(&n.title).body(&n.body).show() {
-                eprintln!("No se pudo mostrar la notificación: {e}");
-            }
-        }
+        let ids: Vec<i64> = plan.due.iter().map(|t| t.id).collect();
+        popup::push(app, &ids);
         let _ = app.emit("tasks-changed", ());
     }
     sleep_ms(plan.next, now)
@@ -247,34 +206,5 @@ mod tests {
         assert_eq!(sleep_ms(Some(NOW + 3_600_000), NOW), Some(MAX_SLEEP_MS as u64));
         // Si el reloj ya lo ha pasado (no debería), no hay sueño negativo.
         assert_eq!(sleep_ms(Some(NOW - 5), NOW), Some(0));
-    }
-
-    // --- notices ---
-
-    #[test]
-    fn hasta_tres_avisos_van_por_separado() {
-        let mut t = task(1, Some(NOW));
-        t.notes = Some("Primera línea\nsegunda".into());
-        let n = notices(&[t, task(2, Some(NOW)), task(3, Some(NOW))]);
-        assert_eq!(n.len(), 3);
-        assert_eq!(n[0], Notice { title: "t1".into(), body: "Primera línea".into() });
-        assert_eq!(n[1].body, "Recordatorio");
-    }
-
-    #[test]
-    fn mas_de_tres_se_agrupan() {
-        let due: Vec<Task> = (1..=4).map(|i| task(i, Some(NOW))).collect();
-        let n = notices(&due);
-        assert_eq!(n.len(), 1);
-        assert_eq!(n[0].title, "4 recordatorios");
-        assert_eq!(n[0].body, "• t1\n• t2\n• t3\n• t4");
-    }
-
-    #[test]
-    fn la_notificacion_agrupada_resume_los_que_no_caben() {
-        let due: Vec<Task> = (1..=8).map(|i| task(i, Some(NOW))).collect();
-        let n = notices(&due);
-        assert_eq!(n[0].title, "8 recordatorios");
-        assert!(n[0].body.ends_with("• t5\ny 3 más"), "{}", n[0].body);
     }
 }

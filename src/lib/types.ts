@@ -9,7 +9,7 @@ export interface Task {
   createdAt: number;
   completedAt: number | null;
   remindAt: number | null;
-  /** Ya se ha mostrado la notificación de `remindAt`. */
+  /** Ya se ha avisado de `remindAt` (popup). */
   reminded: boolean;
 }
 

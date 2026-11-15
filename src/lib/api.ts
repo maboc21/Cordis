@@ -56,3 +56,20 @@ export const previewImport = () => invoke<FileSummary | null>("preview_import");
 
 /** Reemplaza todas las tareas por las del archivo. Devuelve cuántas hay. */
 export const importTasks = (path: string) => invoke<number>("import_tasks", { path });
+
+// --- Popup de recordatorios (ventana `reminder`) ---
+
+export const popupTasks = () => invoke<Task[]>("popup_tasks");
+
+/** Pide a Rust que ajuste la ventana a esta altura (px lógicos). */
+export const popupResize = (height: number) => invoke<void>("popup_resize", { height });
+
+export const popupDone = (id: number) => invoke<void>("popup_done", { id });
+
+/** Vuelve a avisar en `until` (ms Unix UTC). */
+export const popupSnooze = (id: number, until: number) =>
+  invoke<void>("popup_snooze", { id, until });
+
+export const popupOpenList = () => invoke<void>("popup_open_list");
+
+export const popupClose = () => invoke<void>("popup_close");

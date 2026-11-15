@@ -22,7 +22,7 @@ pub struct Task {
     pub created_at: i64,
     pub completed_at: Option<i64>,
     pub remind_at: Option<i64>,
-    /// Ya se ha mostrado la notificación de `remind_at`.
+    /// Ya se ha avisado de `remind_at` (popup).
     pub reminded: bool,
 }
 
@@ -116,7 +116,7 @@ pub fn set_done(conn: &Connection, id: i64, done: bool, now: i64) -> Result<Task
     get(conn, id)
 }
 
-/// Pone o quita el recordatorio. Cambiarlo siempre rearma la notificación.
+/// Pone o quita el recordatorio. Cambiarlo siempre rearma el aviso.
 pub fn set_reminder(conn: &Connection, id: i64, remind_at: Option<i64>) -> Result<Task> {
     exec_on(
         conn,

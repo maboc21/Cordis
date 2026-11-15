@@ -54,6 +54,8 @@ export function installDevMock() {
     wayland: false,
     autostart,
   });
+  // Tareas ya atendidas en el popup simulado.
+  const popupGone = new Set<number>();
   // Los diálogos de archivo no existen en el navegador: se simula una copia.
   const fakePath = "C:\\Users\\yo\\Documents\\tareas-copia.json";
 
@@ -94,6 +96,27 @@ export function installDevMock() {
         make("Tarea importada 1");
         make("Tarea importada 2");
         return 2;
+      // Popup: muestra las dos primeras pendientes como si hubieran vencido.
+      case "popup_tasks":
+        return [...tasks.values()]
+          .filter((t) => !t.done && !popupGone.has(t.id))
+          .slice(0, 2)
+          .map((t) => ({ ...t, remindAt: t.remindAt ?? Date.now() - 60_000, reminded: true }));
+      case "popup_resize":
+        console.info(`[mock] popup_resize ${a.height}`);
+        return null;
+      case "popup_done":
+        Object.assign(get(a.id), { done: true, completedAt: Date.now() });
+        popupGone.add(a.id);
+        return null;
+      case "popup_snooze":
+        Object.assign(get(a.id), { remindAt: a.until, reminded: false });
+        popupGone.add(a.id);
+        return null;
+      case "popup_open_list":
+      case "popup_close":
+        console.info(`[mock] ${cmd}`);
+        return null;
       case "list_tasks":
         return [...tasks.values()].sort((x, y) => x.position - y.position || x.id - y.id);
       case "create_task":

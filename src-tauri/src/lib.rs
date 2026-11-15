@@ -2,6 +2,7 @@ mod backup;
 mod commands;
 mod db;
 mod error;
+mod popup;
 mod reminders;
 mod shortcut;
 mod tray;
@@ -31,7 +32,6 @@ pub fn run() {
             }
         }))
         .plugin(shortcut::plugin())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -49,6 +49,7 @@ pub fn run() {
             app.manage(shortcut::Status::default());
             let shortcut_ok = shortcut::register_saved(handle);
             // Primera vuelta inmediata: avisa lo que venció con la app cerrada.
+            app.manage(popup::PopupState::default());
             reminders::start(handle);
 
             if !shortcut_ok && !shortcut::is_wayland() {
@@ -81,6 +82,12 @@ pub fn run() {
             commands::export_tasks,
             commands::preview_import,
             commands::import_tasks,
+            commands::popup_tasks,
+            commands::popup_resize,
+            commands::popup_done,
+            commands::popup_snooze,
+            commands::popup_open_list,
+            commands::popup_close,
         ])
         .run(tauri::generate_context!())
         .expect("error al arrancar la aplicación");

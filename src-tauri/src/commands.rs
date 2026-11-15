@@ -5,14 +5,14 @@
 use std::path::PathBuf;
 
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt as _;
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder};
 
 use crate::db::{self, settings, tasks, tasks::Task, Db};
 use crate::error::{Error, Result};
 use crate::reminders::Scheduler;
-use crate::{backup, shortcut, window};
+use crate::{backup, popup, shortcut, window};
 
 #[tauri::command]
 pub fn app_version(app: tauri::AppHandle) -> String {
@@ -45,6 +45,7 @@ pub fn set_task_notes(db: State<'_, Db>, id: i64, notes: Option<String>) -> Resu
 
 #[tauri::command]
 pub fn set_task_done(
+    app: AppHandle,
     db: State<'_, Db>,
     scheduler: State<'_, Scheduler>,
     id: i64,
@@ -52,6 +53,7 @@ pub fn set_task_done(
 ) -> Result<Task> {
     let task = tasks::set_done(&db.lock(), id, done, db::now_ms())?;
     scheduler.reschedule();
+    popup::refresh(&app);
     Ok(task)
 }
 
@@ -68,10 +70,79 @@ pub fn set_task_reminder(
 }
 
 #[tauri::command]
-pub fn delete_task(db: State<'_, Db>, scheduler: State<'_, Scheduler>, id: i64) -> Result<()> {
+pub fn delete_task(
+    app: AppHandle,
+    db: State<'_, Db>,
+    scheduler: State<'_, Scheduler>,
+    id: i64,
+) -> Result<()> {
     tasks::delete(&db.lock(), id)?;
     scheduler.reschedule();
+    popup::refresh(&app);
     Ok(())
+}
+
+// --- Popup de recordatorios ---
+//
+// Los llama la ventana `reminder`. Cada acción actualiza la BD, despierta al
+// planificador, quita la tarea del popup (que se cierra si queda vacío) y
+// avisa a la ventana principal con `tasks-changed` para que recargue.
+
+#[tauri::command]
+pub fn popup_tasks(app: AppHandle) -> Vec<Task> {
+    popup::tasks(&app)
+}
+
+/// La interfaz del popup mide su contenido y pide esta altura (px lógicos).
+#[tauri::command]
+pub fn popup_resize(app: AppHandle, height: f64) {
+    popup::resize(&app, height);
+}
+
+#[tauri::command]
+pub fn popup_done(
+    app: AppHandle,
+    db: State<'_, Db>,
+    scheduler: State<'_, Scheduler>,
+    id: i64,
+) -> Result<()> {
+    tasks::set_done(&db.lock(), id, true, db::now_ms())?;
+    scheduler.reschedule();
+    popup::remove(&app, id);
+    let _ = app.emit("tasks-changed", ());
+    Ok(())
+}
+
+/// Pospone: el recordatorio vuelve a avisar en `until` (ms Unix UTC).
+#[tauri::command]
+pub fn popup_snooze(
+    app: AppHandle,
+    db: State<'_, Db>,
+    scheduler: State<'_, Scheduler>,
+    id: i64,
+    until: i64,
+) -> Result<()> {
+    if until <= db::now_ms() {
+        return Err(Error::Invalid("Esa hora ya ha pasado".into()));
+    }
+    tasks::set_reminder(&db.lock(), id, Some(until))?;
+    scheduler.reschedule();
+    popup::remove(&app, id);
+    let _ = app.emit("tasks-changed", ());
+    Ok(())
+}
+
+/// Cierra el popup y muestra la lista.
+#[tauri::command]
+pub fn popup_open_list(app: AppHandle) {
+    popup::close(&app);
+    window::show(&app, window::View::List);
+}
+
+/// Cierra el popup; los recordatorios quedan como avisados.
+#[tauri::command]
+pub fn popup_close(app: AppHandle) {
+    popup::close(&app);
 }
 
 #[tauri::command]

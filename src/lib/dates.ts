@@ -53,6 +53,15 @@ export interface Preset {
   ms: number;
 }
 
+/** Opciones de «Posponer» en el popup de recordatorios. */
+export function snoozeOptions(now = Date.now()): Preset[] {
+  return [
+    { label: "10 min", ms: now + 10 * 60_000 },
+    { label: "1 hora", ms: now + 3_600_000 },
+    { label: "Mañana 9:00", ms: at(now, 1, 9) },
+  ];
+}
+
 /** Atajos del selector de recordatorio, calculados respecto a `now`. */
 export function presets(now = Date.now()): Preset[] {
   const fiveMin = 5 * 60_000;
