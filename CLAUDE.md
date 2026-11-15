@@ -22,7 +22,8 @@ npm run check                      # svelte-check (tipos de TS y Svelte)
 npm run build                      # solo compila el frontend a dist/
 cargo test --manifest-path src-tauri/Cargo.toml   # tests de Rust
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
-npm run tauri build                # binario release + instaladores
+npm run tauri build -- --bundles msi              # Windows: binario release + .msi
+npm run tauri build -- --bundles appimage,deb     # Linux (solo se puede en Linux)
 npm run tauri icon src-tauri/icons/app-icon.svg   # regenerar iconos
 ```
 
@@ -63,19 +64,26 @@ src-tauri/
   src/tray.rs            icono de bandeja y menú Mostrar / Ajustes / Salir
   src/shortcut.rs        plugin de atajo global, parse() con validación, registro, is_wayland()
   src/reminders.rs       planificador: plan()/notices()/sleep_ms() puros y testeados + bucle tokio
+  src/backup.rs          formato JSON de la copia, export/parse/import con tests
   src/db/mod.rs          Db (Mutex<Connection>), open(), pragmas, now_ms()
   src/db/migrations.rs   lista versionada de SQL + PRAGMA user_version
   src/db/tasks.rs        Task, CRUD y reorder(), con sus tests
   src/db/settings.rs     clave/valor con accesores tipados (shortcut)
 ```
 
-Estructura prevista para la fase 6 (Rust): `backup.rs`.
+### Copia de seguridad y arranque automático
+
+- **Formato** (`backup.rs`): `{ app: "organizador-tareas", version: 1, exportedAt, tasks: [...] }` en camelCase. Sin ids; el orden del array es el de la lista. Es independiente de la tabla: si cambia el esquema, se adapta `parse`; si cambia el formato, se sube `FORMAT_VERSION`. Una copia de una versión más nueva se rechaza.
+- `parse` valida y normaliza (títulos recortados y no vacíos, notas vacías → `null`, `completedAt` solo en las hechas) **sin tocar la BD**. `import` borra y reinserta todo en una transacción.
+- Flujo de importar en dos pasos: `preview_import` abre el diálogo, valida y devuelve cuántas tareas trae y cuántas hay; la interfaz pide confirmación; `import_tasks(path)` vuelve a leer, importa y llama a `Scheduler::reschedule()`.
+- Los comandos con diálogo son **`async`**: los `blocking_*` del plugin de diálogos se bloquearían en el hilo principal. Los diálogos llevan `set_parent` (si no, quedan detrás de la ventana, que es *always on top*) y se abren con `window::pause_autohide`, un guard que evita que perder el foco oculte la ventana mientras están abiertos.
+- **Autoarranque**: plugin `autostart` con `--hidden`. El estado lo guarda el sistema (registro `Run` en Windows, `.desktop` en `~/.config/autostart` en Linux), no la BD. Ojo: activarlo desde `tauri dev` registra la ruta del ejecutable de debug.
 
 ### Recordatorios
 
 - Las notificaciones programadas del plugin no funcionan en escritorio: `reminders.rs` tiene un bucle propio en `tauri::async_runtime` (tokio). Cada vuelta (`tick`) lee `tasks::pending_reminders`, calcula con `plan(pendientes, now)` qué está vencido y cuál es el siguiente, marca los vencidos con `mark_reminded` **antes** de notificar (mejor perder un aviso que repetirlo), los notifica y emite `tasks-changed` para que la interfaz recargue.
 - Espera con `select!` entre `sleep(sleep_ms(next))` y `Notify`. `sleep_ms` limita el sueño a 60 s porque el reloj de tokio es monótono y no ve cambios de hora ni (según el equipo) la suspensión; sin recordatorios pendientes no despierta nunca.
-- **Hay que llamar a `Scheduler::reschedule()`** desde cualquier comando que pueda cambiar el próximo recordatorio (hoy: `set_task_reminder`, `set_task_done`, `delete_task`; en la fase 6, importar). `Notify::notify_one` guarda el permiso si el bucle no está esperando, así que no se pierden avisos.
+- **Hay que llamar a `Scheduler::reschedule()`** desde cualquier comando que pueda cambiar el próximo recordatorio (`set_task_reminder`, `set_task_done`, `delete_task`, `import_tasks`). `Notify::notify_one` guarda el permiso si el bucle no está esperando, así que no se pierden avisos.
 - La primera vuelta es inmediata al arrancar: avisa lo que venció con la app cerrada. Más de 3 a la vez se agrupan en una notificación («N recordatorios» con hasta 5 títulos).
 - Al desmarcar una tarea hecha cuyo recordatorio ya pasó y no se avisó, se avisa en ese momento.
 - La interfaz no deja poner un recordatorio en el pasado (el backend sí lo acepta, para importar).
@@ -125,6 +133,7 @@ Estructura prevista para la fase 6 (Rust): `backup.rs`.
 - **Planificador de recordatorios**: tarea tokio (runtime de Tauri) con `select!` entre `sleep_until(próximo)` y un `Notify` que despiertan los comandos que cambian tareas. `next_reminder()` es pura y tiene tests. Más de 3 vencidos al arrancar se agrupan en una notificación.
 - **Autoarranque** con `--hidden`: arranca en la bandeja sin mostrar la ventana.
 - **Exportar/importar** con `tauri-plugin-dialog`, llamado desde Rust. Importar **reemplaza** todas las tareas, previa confirmación.
+- **Instalador de Windows** en español (`bundle.windows.wix.language = es-ES`).
 - **Tareas hechas** bajan a una sección «Hechas» plegable al final.
 - **Wayland**: no hay atajos globales; el ejecutable acepta `--toggle` y, por single-instance, conmuta la ventana de la instancia abierta.
 - **Git**: solo se hace commit cuando el usuario lo pide.
@@ -135,7 +144,7 @@ Estructura prevista para la fase 6 (Rust): `backup.rs`.
 - GNOME: la bandeja necesita la extensión AppIndicator.
 - Linux: los clics en el icono de la bandeja no llegan a la app (AppIndicator); solo funciona el menú.
 - Windows: si la ventana se muestra desde otro proceso (`--toggle`), Windows puede negarle el foco (protección contra robo de foco). Con el atajo y la bandeja no pasa.
-- Por comprobar en la app real: si el desplegable nativo del `datetime-local` quita el foco a la ventana, se ocultaría al abrirlo. Los diálogos de archivo de la fase 6 seguro que lo quitan: habrá que suspender el ocultado mientras estén abiertos.
+- Por comprobar en la app real: si el desplegable nativo del `datetime-local` quita el foco a la ventana, se ocultaría al abrirlo (los diálogos de archivo ya pausan el ocultado).
 - Windows: en desarrollo las notificaciones salen a nombre de PowerShell; con la app instalada (.msi), con su nombre e icono.
 - `.AppImage` y `.deb` se generan en Linux (o CI); no hay compilación cruzada desde Windows.
 
@@ -155,4 +164,6 @@ Estructura prevista para la fase 6 (Rust): `backup.rs`.
 | 3 | Interfaz y reordenación | Hecha |
 | 4 | Bandeja, atajo global, single-instance y `--toggle` | Hecha |
 | 5 | Recordatorios | Hecha |
-| 6 | Autoarranque, exportar/importar y empaquetado | Pendiente |
+| 6 | Autoarranque, exportar/importar y empaquetado | Hecha en Windows (.msi). `.AppImage`/`.deb` sin generar: requieren Linux |
+
+Medidas del build de release en Windows (v0.1.0): ejecutable 4,6 MiB, `.msi` 2,5 MiB. Compilación release completa desde cero: ~3 min.

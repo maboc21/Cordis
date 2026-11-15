@@ -2,6 +2,7 @@
 //! en el monitor del ratón, se oculta al perder el foco, con Esc (desde la
 //! interfaz) o al cerrarla. Cerrarla nunca sale de la app.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -31,6 +32,24 @@ pub struct WindowState {
     /// Última vista pedida. El `show-view` del arranque se emite antes de que
     /// la interfaz escuche, así que esta la consulta al cargar (`current_view`).
     view: Mutex<View>,
+    /// Pausas activas del ocultado al perder el foco (ver `pause_autohide`).
+    autohide_pauses: AtomicUsize,
+}
+
+/// Mientras exista, perder el foco no oculta la ventana. Para los diálogos
+/// de archivo, que se llevan el foco: sin esto, la ventana desaparecería al
+/// abrirlos. Al soltarse (también si hay un error o un pánico) se reactiva.
+pub struct AutohidePause(AppHandle);
+
+pub fn pause_autohide(app: &AppHandle) -> AutohidePause {
+    app.state::<WindowState>().autohide_pauses.fetch_add(1, Ordering::SeqCst);
+    AutohidePause(app.clone())
+}
+
+impl Drop for AutohidePause {
+    fn drop(&mut self) {
+        self.0.state::<WindowState>().autohide_pauses.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 pub fn current_view(app: &AppHandle) -> View {
@@ -62,10 +81,11 @@ fn hide_on_blur(app: &AppHandle) {
     if w.is_devtools_open() {
         return;
     }
-    if !w.is_visible().unwrap_or(false) {
+    let state = app.state::<WindowState>();
+    if state.autohide_pauses.load(Ordering::SeqCst) > 0 || !w.is_visible().unwrap_or(false) {
         return;
     }
-    *app.state::<WindowState>().hidden_on_blur_at.lock().unwrap() = Some(Instant::now());
+    *state.hidden_on_blur_at.lock().unwrap() = Some(Instant::now());
     let _ = w.hide();
 }
 

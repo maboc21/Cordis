@@ -24,6 +24,17 @@ export interface Settings {
   shortcutError: string | null;
   /** Sesión Wayland: sin atajos globales, hay que usar `--toggle`. */
   wayland: boolean;
+  /** Arranca con el sistema. */
+  autostart: boolean;
+}
+
+// Espejo de `commands::FileSummary`.
+export interface FileSummary {
+  path: string;
+  /** Tareas exportadas, o que contiene la copia. */
+  count: number;
+  /** Tareas que hay ahora (al previsualizar una importación). */
+  current: number;
 }
 
 /** Vista que pide Rust al mostrar la ventana (evento `show-view`). */

@@ -2,13 +2,17 @@
 //! reloj si hace falta y delegan en `db`. Desde JS los argumentos van en
 //! camelCase (`remindAt`), como hace Tauri por defecto.
 
+use std::path::PathBuf;
+
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_autostart::ManagerExt as _;
+use tauri_plugin_dialog::{DialogExt, FileDialogBuilder};
 
 use crate::db::{self, settings, tasks, tasks::Task, Db};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::reminders::Scheduler;
-use crate::{shortcut, window};
+use crate::{backup, shortcut, window};
 
 #[tauri::command]
 pub fn app_version(app: tauri::AppHandle) -> String {
@@ -101,6 +105,8 @@ pub struct SettingsView {
     shortcut_error: Option<String>,
     /// Sesión Wayland: no hay atajos globales, hay que usar `--toggle`.
     wayland: bool,
+    /// Arranca con el sistema (lo guarda el propio sistema, no la BD).
+    autostart: bool,
 }
 
 fn settings_view(app: &AppHandle, db: &Db) -> Result<SettingsView> {
@@ -111,7 +117,19 @@ fn settings_view(app: &AppHandle, db: &Db) -> Result<SettingsView> {
         shortcut,
         default_shortcut: settings::DEFAULT_SHORTCUT,
         wayland: shortcut::is_wayland(),
+        autostart: app.autolaunch().is_enabled().unwrap_or(false),
     })
+}
+
+/// Activa o desactiva el arranque con el sistema (con `--hidden`, en la bandeja).
+#[tauri::command]
+pub fn set_autostart(app: AppHandle, db: State<'_, Db>, enabled: bool) -> Result<SettingsView> {
+    let al = app.autolaunch();
+    let result = if enabled { al.enable() } else { al.disable() };
+    result.map_err(|e| {
+        Error::Invalid(format!("No se pudo cambiar el arranque automático ({e})"))
+    })?;
+    settings_view(&app, &db)
 }
 
 #[tauri::command]
@@ -143,4 +161,67 @@ pub fn suspend_shortcut(app: AppHandle) {
 #[tauri::command]
 pub fn resume_shortcut(app: AppHandle) {
     shortcut::register_saved(&app);
+}
+
+// --- Copia de seguridad ---
+//
+// Son `async` a propósito: los diálogos `blocking_*` se quedarían bloqueados
+// en el hilo principal, que es donde Tauri ejecuta los comandos síncronos.
+
+/// Diálogo de archivo encima de la ventana y en Documentos.
+fn file_dialog(app: &AppHandle) -> FileDialogBuilder<tauri::Wry> {
+    let mut d = app.dialog().file().add_filter("Copia de seguridad (JSON)", &["json"]);
+    if let Some(w) = app.get_webview_window(window::MAIN) {
+        d = d.set_parent(&w);
+    }
+    if let Ok(docs) = app.path().document_dir() {
+        d = d.set_directory(docs);
+    }
+    d
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSummary {
+    path: String,
+    /// Tareas exportadas, o que contiene la copia.
+    count: usize,
+    /// Tareas que hay ahora (solo al previsualizar una importación).
+    current: usize,
+}
+
+/// Pide dónde guardar y exporta. `None` si el usuario cancela.
+#[tauri::command]
+pub async fn export_tasks(app: AppHandle, default_name: String) -> Result<Option<FileSummary>> {
+    let path = {
+        let _pause = window::pause_autohide(&app);
+        file_dialog(&app).set_file_name(default_name).blocking_save_file()
+    };
+    let Some(path) = path.and_then(|p| p.into_path().ok()) else { return Ok(None) };
+    let (json, count) = backup::export(&app.state::<Db>().lock(), db::now_ms())?;
+    std::fs::write(&path, json)?;
+    Ok(Some(FileSummary { path: path.display().to_string(), count, current: count }))
+}
+
+/// Pide un archivo y lo valida sin importarlo, para que la interfaz pida
+/// confirmación con los números delante. `None` si el usuario cancela.
+#[tauri::command]
+pub async fn preview_import(app: AppHandle) -> Result<Option<FileSummary>> {
+    let path = {
+        let _pause = window::pause_autohide(&app);
+        file_dialog(&app).blocking_pick_file()
+    };
+    let Some(path) = path.and_then(|p| p.into_path().ok()) else { return Ok(None) };
+    let backup = backup::parse(&std::fs::read_to_string(&path)?)?;
+    let current = tasks::list(&app.state::<Db>().lock())?.len();
+    Ok(Some(FileSummary { path: path.display().to_string(), count: backup.tasks.len(), current }))
+}
+
+/// Reemplaza todas las tareas por las del archivo (ya confirmado).
+#[tauri::command]
+pub async fn import_tasks(app: AppHandle, path: String) -> Result<usize> {
+    let backup = backup::parse(&std::fs::read_to_string(PathBuf::from(path))?)?;
+    let count = backup::import(&mut app.state::<Db>().lock(), &backup)?;
+    app.state::<Scheduler>().reschedule();
+    Ok(count)
 }

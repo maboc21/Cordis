@@ -45,13 +45,17 @@ export function installDevMock() {
 
   const defaultShortcut = "Ctrl+Shift+Space";
   let shortcut = defaultShortcut;
+  let autostart = false;
   const settings = () => ({
     shortcut,
     defaultShortcut,
     shortcutActive: true,
     shortcutError: null,
     wayland: false,
+    autostart,
   });
+  // Los diálogos de archivo no existen en el navegador: se simula una copia.
+  const fakePath = "C:\\Users\\yo\\Documents\\tareas-copia.json";
 
   mockIPC((cmd, args) => {
     const a = (args ?? {}) as Record<string, any>;
@@ -78,6 +82,18 @@ export function installDevMock() {
       case "suspend_shortcut":
       case "resume_shortcut":
         return null;
+      case "set_autostart":
+        autostart = a.enabled;
+        return settings();
+      case "export_tasks":
+        return { path: fakePath.replace("tareas-copia.json", a.defaultName), count: tasks.size, current: tasks.size };
+      case "preview_import":
+        return { path: fakePath, count: 2, current: tasks.size };
+      case "import_tasks":
+        tasks.clear();
+        make("Tarea importada 1");
+        make("Tarea importada 2");
+        return 2;
       case "list_tasks":
         return [...tasks.values()].sort((x, y) => x.position - y.position || x.id - y.id);
       case "create_task":

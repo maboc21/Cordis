@@ -2,7 +2,7 @@
 // La interfaz solo habla con el backend a través de este módulo.
 // Si un comando falla, la promesa se rechaza con un texto en español.
 import { invoke } from "@tauri-apps/api/core";
-import type { Settings, Task, View } from "./types";
+import type { FileSummary, Settings, Task, View } from "./types";
 
 export const appVersion = () => invoke<string>("app_version");
 
@@ -43,3 +43,16 @@ export const suspendShortcut = () => invoke<void>("suspend_shortcut");
 
 /** Vuelve a activar el atajo guardado. */
 export const resumeShortcut = () => invoke<void>("resume_shortcut");
+
+export const setAutostart = (enabled: boolean) =>
+  invoke<Settings>("set_autostart", { enabled });
+
+/** Pide dónde guardar y exporta. `null` si se cancela. */
+export const exportTasks = (defaultName: string) =>
+  invoke<FileSummary | null>("export_tasks", { defaultName });
+
+/** Pide un archivo y lo valida sin importarlo. `null` si se cancela. */
+export const previewImport = () => invoke<FileSummary | null>("preview_import");
+
+/** Reemplaza todas las tareas por las del archivo. Devuelve cuántas hay. */
+export const importTasks = (path: string) => invoke<number>("import_tasks", { path });

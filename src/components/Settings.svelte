@@ -2,7 +2,8 @@
   import { onDestroy, onMount } from "svelte";
   import * as api from "../lib/api";
   import { format as formatAccel, fromKeyEvent, loadLayoutMap, type LayoutMap } from "../lib/shortcut";
-  import type { Settings } from "../lib/types";
+  import { store } from "../lib/tasks.svelte";
+  import type { FileSummary, Settings } from "../lib/types";
 
   let { onBack }: { onBack: () => void } = $props();
 
@@ -77,6 +78,71 @@
     else void finish(r.value);
   }
 
+  // --- Arranque automático ---
+
+  async function toggleAutostart(e: Event) {
+    const enabled = (e.currentTarget as HTMLInputElement).checked;
+    try {
+      settings = await api.setAutostart(enabled);
+    } catch (err) {
+      message = { kind: "error", text: String(err) };
+      settings = await api.getSettings().catch(() => settings);
+    }
+  }
+
+  // --- Copia de seguridad ---
+
+  let backupMsg = $state<{ kind: "ok" | "error"; text: string } | null>(null);
+  let pendingImport = $state<FileSummary | null>(null);
+  let busy = $state(false);
+
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path;
+
+  function todayName() {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `tareas-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`;
+  }
+
+  async function run(fn: () => Promise<void>) {
+    if (busy) return;
+    busy = true;
+    backupMsg = null;
+    try {
+      await fn();
+    } catch (e) {
+      backupMsg = { kind: "error", text: String(e) };
+    } finally {
+      busy = false;
+    }
+  }
+
+  const doExport = () =>
+    run(async () => {
+      pendingImport = null;
+      const r = await api.exportTasks(todayName());
+      if (r)
+        backupMsg = {
+          kind: "ok",
+          text: `${plural(r.count, "tarea exportada", "tareas exportadas")} a ${fileName(r.path)}`,
+        };
+    });
+
+  const pickImport = () =>
+    run(async () => {
+      pendingImport = await api.previewImport();
+    });
+
+  const confirmImport = () =>
+    run(async () => {
+      if (!pendingImport) return;
+      const n = await api.importTasks(pendingImport.path);
+      pendingImport = null;
+      await store.load();
+      backupMsg = { kind: "ok", text: `${plural(n, "tarea importada", "tareas importadas")}` };
+    });
+
   async function restoreDefault() {
     if (!settings) return;
     await finish(null);
@@ -145,6 +211,46 @@
     {#if message}
       <p class="message {message.kind}" role="status">{message.text}</p>
     {/if}
+
+    {#if settings}
+      <h2>Inicio</h2>
+      <label class="switch">
+        <input type="checkbox" checked={settings.autostart} onchange={toggleAutostart} />
+        Arrancar con el sistema (en la bandeja, sin abrir la ventana)
+      </label>
+    {/if}
+
+    <h2>Copia de seguridad</h2>
+    <div class="row">
+      <button class="action" onclick={doExport} disabled={busy}>Exportar…</button>
+      <button class="action" onclick={pickImport} disabled={busy}>Importar…</button>
+    </div>
+
+    {#if pendingImport}
+      <div class="confirm" role="alertdialog" aria-label="Confirmar importación">
+        <p>
+          <strong>{fileName(pendingImport.path)}</strong> tiene
+          {plural(pendingImport.count, "tarea", "tareas")}.
+          {#if pendingImport.current === 0}
+            La lista actual está vacía.
+          {:else if pendingImport.current === 1}
+            Al importarlo se <strong>reemplazará</strong> la tarea actual.
+          {:else}
+            Al importarlo se <strong>reemplazarán</strong> las {pendingImport.current} tareas actuales.
+          {/if}
+        </p>
+        <div class="row">
+          <button class="action danger" onclick={confirmImport} disabled={busy}>
+            Importar y reemplazar
+          </button>
+          <button class="link" onclick={() => (pendingImport = null)}>Cancelar</button>
+        </div>
+      </div>
+    {/if}
+
+    {#if backupMsg}
+      <p class="message {backupMsg.kind}" role="status">{backupMsg.text}</p>
+    {/if}
   </section>
 
   <footer>Organizador de tareas {version && `v${version}`}</footer>
@@ -180,6 +286,64 @@
 
   section {
     flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  section h2:not(:first-child) {
+    margin-top: 20px;
+  }
+
+  .switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+
+  .switch input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--accent);
+  }
+
+  .action {
+    padding: 6px 14px;
+    font-size: 0.9rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .action:hover:not(:disabled) {
+    border-color: var(--fg-muted);
+  }
+
+  .action:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .action.danger {
+    color: var(--on-accent);
+    background: var(--danger);
+    border-color: var(--danger);
+  }
+
+  .confirm {
+    margin-top: 10px;
+    padding: 10px 12px;
+    font-size: 0.88rem;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .confirm p {
+    margin: 0 0 10px;
+    overflow-wrap: anywhere;
   }
 
   button {

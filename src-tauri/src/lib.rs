@@ -1,3 +1,4 @@
+mod backup;
 mod commands;
 mod db;
 mod error;
@@ -31,6 +32,11 @@ pub fn run() {
         }))
         .plugin(shortcut::plugin())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![ARG_HIDDEN]),
+        ))
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -71,6 +77,10 @@ pub fn run() {
             commands::set_shortcut,
             commands::suspend_shortcut,
             commands::resume_shortcut,
+            commands::set_autostart,
+            commands::export_tasks,
+            commands::preview_import,
+            commands::import_tasks,
         ])
         .run(tauri::generate_context!())
         .expect("error al arrancar la aplicación");
