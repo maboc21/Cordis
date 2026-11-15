@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    organizador_tareas_lib::run()
+    cordis_lib::run()
 }

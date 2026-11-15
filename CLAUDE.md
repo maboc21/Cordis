@@ -6,7 +6,7 @@ Guía para trabajar en este repositorio con Claude Code.
 
 ## Qué es
 
-Organizador de tareas de escritorio, ligero y solo local (sin red, sin cuentas, sin sincronización). Ventana flotante tipo Spotlight que se abre con un atajo global, vive en la bandeja y avisa de los recordatorios con un popup propio que no se cierra solo.
+**Cordis** es un organizador de tareas de escritorio, ligero y solo local (sin red, sin cuentas, sin sincronización). Ventana flotante tipo Spotlight que se abre con un atajo global, vive en la bandeja y avisa de los recordatorios con un popup propio que no se cierra solo.
 
 Plataformas: Windows primero; el código debe funcionar también en Linux (X11 y Wayland).
 
@@ -77,7 +77,7 @@ src-tauri/
 
 ### Copia de seguridad y arranque automático
 
-- **Formato** (`backup.rs`): `{ app: "organizador-tareas", version: 1, exportedAt, tasks: [...] }` en camelCase. Sin ids; el orden del array es el de la lista. Es independiente de la tabla: si cambia el esquema, se adapta `parse`; si cambia el formato, se sube `FORMAT_VERSION`. Una copia de una versión más nueva se rechaza.
+- **Formato** (`backup.rs`): `{ app: "cordis", version: 1, exportedAt, tasks: [...] }` en camelCase. `parse` acepta también `"organizador-tareas"` (copias de antes del cambio de nombre). Sin ids; el orden del array es el de la lista. Es independiente de la tabla: si cambia el esquema, se adapta `parse`; si cambia el formato, se sube `FORMAT_VERSION`. Una copia de una versión más nueva se rechaza.
 - `parse` valida y normaliza (títulos recortados y no vacíos, notas vacías → `null`, `completedAt` solo en las hechas) **sin tocar la BD**. `import` borra y reinserta todo en una transacción.
 - Flujo de importar en dos pasos: `preview_import` abre el diálogo, valida y devuelve cuántas tareas trae y cuántas hay; la interfaz pide confirmación; `import_tasks(path)` vuelve a leer, importa y llama a `Scheduler::reschedule()`.
 - Los comandos con diálogo son **`async`**: los `blocking_*` del plugin de diálogos se bloquearían en el hilo principal. Los diálogos llevan `set_parent` (si no, quedan detrás de la ventana, que es *always on top*) y se abren con `window::pause_autohide`, un guard que evita que perder el foco oculte la ventana mientras están abiertos.
@@ -121,7 +121,7 @@ src-tauri/
 
 ### Base de datos
 
-- Fichero: `<app_data_dir>/tareas.db`. En Windows, `%APPDATA%\com.organizadortareas.desktop\tareas.db`.
+- Fichero: `<app_data_dir>/tareas.db`. En Windows, `%APPDATA%\com.cordis.desktop\tareas.db`.
 - Migraciones en `db/migrations.rs`: cada entrada lleva de la versión `i` a la `i + 1` en su propia transacción. **Nunca edites una migración publicada**; añade otra al final. Si la BD es más nueva que la app, se niega a abrirla (`Error::DbTooNew`).
 - Las funciones de `db::tasks` reciben `&Connection` y `now` como parámetros (no leen el reloj) para que los tests sean deterministas. Los tests usan `db::open_in_memory()`.
 - Comandos de tareas: `list_tasks`, `create_task`, `rename_task`, `set_task_notes`, `set_task_urgent`, `set_task_done`, `set_task_reminder`, `delete_task`, `reorder_tasks` (y `app_version`). Los comandos son síncronos: Tauri los ejecuta en el hilo principal, lo cual está bien porque cada consulta tarda microsegundos.
@@ -150,6 +150,7 @@ src-tauri/
 - **Tareas hechas** bajan a una sección «Hechas» plegable al final.
 - **Wayland**: no hay atajos globales; el ejecutable acepta `--toggle` y, por single-instance, conmuta la ventana de la instancia abierta.
 - **Git**: solo se hace commit cuando el usuario lo pide.
+- **Nombre: Cordis** (elegido por el usuario). Es el `productName`, el título, el tooltip de la bandeja y el ejecutable (`cordis`, librería `cordis_lib`). El `identifier` es `com.cordis.desktop` (antes `com.organizadortareas.desktop`; se cambió cuando la BD era solo de pruebas). De él dependen la carpeta de datos y la clave de single-instance: **cambiarlo deja atrás la BD**. El `upgradeCode` de WiX está fijado al del primer `.msi` («Organizador de tareas») para que el instalador nuevo lo actualice en vez de instalarse al lado; no lo cambies.
 
 ## Limitaciones conocidas
 

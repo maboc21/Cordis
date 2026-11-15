@@ -1,5 +1,5 @@
 [package]
-name = "organizador-tareas"
+name = "cordis"
 version = "0.1.0"
 description = "Organizador de tareas ligero de escritorio"
 edition = "2021"
@@ -8,7 +8,7 @@ rust-version = "1.90"
 [lib]
 # La lógica vive en la librería para poder testearla con `cargo test`;
 # main.rs solo llama a `run()`.
-name = "organizador_tareas_lib"
+name = "cordis_lib"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -1,7 +1,7 @@
 //! Atajo global para mostrar u ocultar la ventana.
 //!
 //! En Wayland las apps no pueden registrar atajos globales: el registro falla
-//! (o no hace nada) y el usuario debe asignar `organizador-tareas --toggle` a
+//! (o no hace nada) y el usuario debe asignar `cordis --toggle` a
 //! una tecla en su escritorio. Por eso un fallo aquí nunca impide arrancar.
 
 use std::str::FromStr;

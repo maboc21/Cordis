@@ -102,7 +102,7 @@
   function todayName() {
     const d = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
-    return `tareas-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`;
+    return `cordis-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`;
   }
 
   async function run(fn: () => Promise<void>) {
@@ -196,7 +196,7 @@
         <p class="note">
           En Wayland las aplicaciones no pueden registrar atajos globales. Asigna este comando a
           una tecla en los ajustes de teclado de tu escritorio:
-          <code>organizador-tareas --toggle</code>
+          <code>cordis --toggle</code>
         </p>
       {:else if !settings.shortcutActive && !recording}
         <p class="note warn">
@@ -253,7 +253,7 @@
     {/if}
   </section>
 
-  <footer>Organizador de tareas {version && `v${version}`}</footer>
+  <footer>Cordis {version && `v${version}`}</footer>
 </div>
 
 <style>

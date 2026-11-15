@@ -12,7 +12,9 @@ use crate::db::tasks;
 use crate::error::{Error, Result};
 
 /// Identifica los ficheros de esta app.
-const APP: &str = "organizador-tareas";
+const APP: &str = "cordis";
+/// Nombre que usaban las copias antes de llamarse Cordis. Se siguen aceptando.
+const LEGACY_APPS: &[&str] = &["organizador-tareas"];
 /// Versión del formato. Súbela (y adapta `parse`) si cambia.
 const FORMAT_VERSION: u32 = 1;
 
@@ -73,7 +75,7 @@ pub fn parse(json: &str) -> Result<Backup> {
     let mut backup: Backup = serde_json::from_str(json).map_err(|e| {
         Error::Invalid(format!("El archivo no es una copia de seguridad válida ({e})"))
     })?;
-    if backup.app != APP {
+    if backup.app != APP && !LEGACY_APPS.contains(&backup.app.as_str()) {
         return Err(Error::Invalid(
             "El archivo no es una copia de seguridad de esta aplicación".into(),
         ));
@@ -173,7 +175,7 @@ mod tests {
 
     #[test]
     fn una_copia_sin_urgentes_se_importa_como_no_urgente() {
-        let json = r#"{"app":"organizador-tareas","version":1,"exportedAt":0,
+        let json = r#"{"app":"cordis","version":1,"exportedAt":0,
             "tasks":[{"title":"antigua","createdAt":1}]}"#;
         let backup = parse(json).unwrap();
         assert!(!backup.tasks[0].urgent);
@@ -228,21 +230,28 @@ mod tests {
     }
 
     #[test]
+    fn acepta_copias_de_antes_del_cambio_de_nombre() {
+        let json = r#"{"app":"organizador-tareas","version":1,"exportedAt":0,
+            "tasks":[{"title":"Vieja","createdAt":1}]}"#;
+        assert_eq!(parse(json).unwrap().tasks[0].title, "Vieja");
+    }
+
+    #[test]
     fn rechaza_una_version_mas_nueva() {
-        let json = r#"{"app":"organizador-tareas","version":99,"exportedAt":0,"tasks":[]}"#;
+        let json = r#"{"app":"cordis","version":99,"exportedAt":0,"tasks":[]}"#;
         assert!(matches!(parse(json), Err(Error::Invalid(m)) if m.contains("más nueva")));
     }
 
     #[test]
     fn rechaza_tareas_sin_titulo_sin_tocar_la_base() {
-        let json = r#"{"app":"organizador-tareas","version":1,"exportedAt":0,
+        let json = r#"{"app":"cordis","version":1,"exportedAt":0,
             "tasks":[{"title":"ok","createdAt":1},{"title":"  ","createdAt":2}]}"#;
         assert!(matches!(parse(json), Err(Error::Invalid(m)) if m.contains("tarea 2")));
     }
 
     #[test]
     fn normaliza_campos_opcionales_y_notas_vacias() {
-        let json = r#"{"app":"organizador-tareas","version":1,"exportedAt":0,
+        let json = r#"{"app":"cordis","version":1,"exportedAt":0,
             "tasks":[{"title":" a ","notes":"  ","createdAt":1,"completedAt":5}]}"#;
         let t = &parse(json).unwrap().tasks[0];
         assert_eq!(t.title, "a");

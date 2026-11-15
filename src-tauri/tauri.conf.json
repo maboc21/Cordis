@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Organizador de tareas",
+  "productName": "Cordis",
   "version": "0.1.0",
-  "identifier": "com.organizadortareas.desktop",
+  "identifier": "com.cordis.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Organizador de tareas",
+        "title": "Cordis",
         "width": 640,
         "height": 440,
         "center": true,
@@ -35,7 +35,8 @@
     "category": "Productivity",
     "windows": {
       "wix": {
-        "language": "es-ES"
+        "language": "es-ES",
+        "upgradeCode": "F1E0F35F-9E4E-59DB-9FFF-23F6EF138E73"
       }
     },
     "icon": [
