@@ -27,6 +27,8 @@ npm run tauri build -- --bundles appimage,deb     # Linux (solo se puede en Linu
 npm run tauri icon src-tauri/icons/app-icon.svg   # regenerar iconos
 ```
 
+**CI** (`.github/workflows/linux.yml`): en `ubuntu-22.04` (glibc antigua para que el `.AppImage` funcione en más distribuciones) instala los prerrequisitos de Tauri, pasa `svelte-check`, `cargo test` y `clippy -D warnings`, y genera `.AppImage` y `.deb` como artefacto `cordis-linux` (30 días). Se lanza a mano desde la pestaña Actions o al subir una etiqueta `v*`. No publica releases.
+
 Tras `tauri icon`, borra lo que genera para Android, iOS, macOS y Microsoft Store (`android/`, `ios/`, `icon.icns`, `Square*Logo.png`, `StoreLogo.png`).
 
 Requisitos en Windows: Node ≥ 20, Rust ≥ 1.90 (rustup, toolchain MSVC), Visual Studio con «Desarrollo para el escritorio con C++» y WebView2 (viene con Windows 11).
@@ -161,7 +163,7 @@ src-tauri/
 - Por comprobar en la app real: si el desplegable nativo del `datetime-local` quita el foco a la ventana, se ocultaría al abrirlo (los diálogos de archivo ya pausan el ocultado).
 - Wayland: el compositor no deja colocar el popup en la esquina; aparecerá donde decida. Tampoco informa de la posición de la ventana, así que arrastrarla puede no fijarla: hay que usar la chincheta.
 - Windows: con la ventana fijada, el clic en el icono de la bandeja no la oculta (al pulsarlo ya ha perdido el foco); se oculta con Esc o con el atajo.
-- `.AppImage` y `.deb` se generan en Linux (o CI); no hay compilación cruzada desde Windows.
+- `.AppImage` y `.deb` se generan en Linux; no hay compilación cruzada desde Windows. Para eso está el workflow de GitHub Actions.
 
 ## Forma de trabajar
 
@@ -179,6 +181,6 @@ src-tauri/
 | 3 | Interfaz y reordenación | Hecha |
 | 4 | Bandeja, atajo global, single-instance y `--toggle` | Hecha |
 | 5 | Recordatorios | Hecha |
-| 6 | Autoarranque, exportar/importar y empaquetado | Hecha en Windows (.msi). `.AppImage`/`.deb` sin generar: requieren Linux |
+| 6 | Autoarranque, exportar/importar y empaquetado | Hecha en Windows (.msi). `.AppImage`/`.deb`: workflow de CI preparado, sin ejecutar todavía |
 
 Medidas del build de release en Windows (v0.1.0): ejecutable 4,6 MiB, `.msi` 2,5 MiB. Compilación release completa desde cero: ~3 min.
