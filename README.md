@@ -125,6 +125,8 @@ El instalador queda en `src-tauri/target/release/bundle/`.
 
 La arquitectura, las decisiones de diseño y las convenciones del código están en [CLAUDE.md](CLAUDE.md).
 
-## Créditos
+## Licencia
 
-Tipografía [Lora](https://github.com/cyrealtype/Lora-Cyrillic), de Cyreal, con licencia SIL Open Font License 1.1.
+Cordis se distribuye con licencia [MIT](LICENSE): puedes usarlo, modificarlo y redistribuirlo libremente, siempre que conserves el aviso de copyright. Se ofrece tal cual, sin garantía.
+
+Incluye la tipografía [Lora](https://github.com/cyrealtype/Lora-Cyrillic), de Cyreal, con licencia SIL Open Font License 1.1.

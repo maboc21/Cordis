@@ -2,6 +2,7 @@
 name = "cordis"
 version = "0.1.0"
 description = "Organizador de tareas ligero de escritorio"
+license = "MIT"
 edition = "2021"
 rust-version = "1.90"
 

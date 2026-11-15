@@ -32,6 +32,7 @@
     "active": true,
     "targets": ["msi", "appimage", "deb"],
     "shortDescription": "Organizador de tareas ligero de escritorio",
+    "license": "MIT",
     "category": "Productivity",
     "windows": {
       "wix": {
