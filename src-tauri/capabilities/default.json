@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Permisos de la ventana principal y del popup de recordatorios",
   "windows": ["main", "reminder"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
 }

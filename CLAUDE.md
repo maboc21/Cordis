@@ -103,7 +103,8 @@ src-tauri/
 - Conflicto conocido: **Claude Desktop usa `Ctrl+Alt+Espacio`** para su acceso rápido. Por eso el valor por defecto es `Ctrl+Shift+Espacio` (decisión del usuario, que cambia la especificación original).
 - El grabador de atajos rechaza combinaciones Ctrl+Alt que escriben un carácter con AltGr (teclados europeos: `@`, `#`, `€`, `]`…), comparando `e.key` con el carácter base de la tecla (`navigator.keyboard.getLayoutMap()` si existe).
 - Se oculta al perder el foco (salvo con las devtools abiertas, en debug), con Esc (`hide_window`) y al cerrarla (`CloseRequested` → `prevent_close`). Solo «Salir» de la bandeja termina la app.
-- `window::toggle` (atajo, clic izquierdo en la bandeja, `--toggle`): si la ventana se acaba de ocultar por perder el foco (< 350 ms), no hace nada. Pulsar la bandeja primero quita el foco y luego llega el clic; sin esto, la ventana se ocultaría y volvería a salir.
+- **Arrastrar y fijar**: la franja superior (asa), el pie y la cabecera de Ajustes llevan `data-tauri-drag-region` (en Tauri 2 no se hereda: va en cada elemento, no en los botones) y la capability incluye `core:window:allow-start-dragging`. Si el usuario mueve la ventana, queda **fijada**: no se oculta al perder el foco, para poder copiar de otras ventanas y pegar en ella. Se detecta en `WindowEvent::Moved` comparando con la posición en la que la puso `show` (`placed_at`): un movimiento distinto es del usuario. La chincheta del pie fija o suelta a mano (`set_pinned`, evento `pinned-changed`). `show` y `hide` la sueltan: siempre se vuelve a abrir centrada, la posición no se guarda (decisión del usuario).
+- `window::toggle` (atajo, clic izquierdo en la bandeja, `--toggle`): si la ventana se acaba de ocultar por perder el foco (< 350 ms), no hace nada. Si está visible sin foco (fijada, con el usuario en otra ventana), solo le devuelve el foco, sin moverla. Pulsar la bandeja primero quita el foco y luego llega el clic; sin esto, la ventana se ocultaría y volvería a salir.
 - **Single-instance** tiene que ser el primer plugin. Una segunda instancia pasa sus argumentos a la primera y termina: con `--toggle` la conmuta; sin argumentos, la muestra.
 - **Atajo**: por defecto `Ctrl+Shift+Space` (`settings::DEFAULT_SHORTCUT`; la interfaz lo recibe en `defaultShortcut`). Se guarda en `settings.shortcut` con el formato del plugin. `shortcut::parse` exige Ctrl, Alt o Super. `set_shortcut` registra primero y guarda solo si funciona; si falla, reactiva el anterior. Mientras la interfaz graba uno nuevo, `suspend_shortcut` lo desactiva para que pulsarlo no oculte la ventana. Un fallo al registrar al arrancar no impide arrancar.
 - Los comandos son síncronos (hilo principal), que es lo que necesita el registro de atajos en Windows.
@@ -153,7 +154,8 @@ src-tauri/
 - Linux: los clics en el icono de la bandeja no llegan a la app (AppIndicator); solo funciona el menú.
 - Windows: si la ventana se muestra desde otro proceso (`--toggle`), Windows puede negarle el foco (protección contra robo de foco). Con el atajo y la bandeja no pasa.
 - Por comprobar en la app real: si el desplegable nativo del `datetime-local` quita el foco a la ventana, se ocultaría al abrirlo (los diálogos de archivo ya pausan el ocultado).
-- Wayland: el compositor no deja colocar el popup en la esquina; aparecerá donde decida.
+- Wayland: el compositor no deja colocar el popup en la esquina; aparecerá donde decida. Tampoco informa de la posición de la ventana, así que arrastrarla puede no fijarla: hay que usar la chincheta.
+- Windows: con la ventana fijada, el clic en el icono de la bandeja no la oculta (al pulsarlo ya ha perdido el foco); se oculta con Esc o con el atajo.
 - `.AppImage` y `.deb` se generan en Linux (o CI); no hay compilación cruzada desde Windows.
 
 ## Forma de trabajar

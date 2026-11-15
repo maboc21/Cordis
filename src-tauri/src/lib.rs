@@ -74,6 +74,8 @@ pub fn run() {
             commands::reorder_tasks,
             commands::hide_window,
             commands::current_view,
+            commands::set_pinned,
+            commands::is_pinned,
             commands::get_settings,
             commands::set_shortcut,
             commands::suspend_shortcut,

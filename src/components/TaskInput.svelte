@@ -42,7 +42,7 @@
 
 <style>
   .new-task {
-    margin: 12px 12px 6px;
+    margin: 0 12px 6px;
     padding: 12px 14px;
     font: inherit;
     font-size: 1.1rem;

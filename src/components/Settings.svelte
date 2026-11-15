@@ -156,12 +156,12 @@
 </script>
 
 <div class="settings">
-  <header>
+  <header data-tauri-drag-region>
     <button class="back" onclick={onBack} title="Volver (Esc)">
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M10 3L5 8l5 5" /></svg>
       Volver
     </button>
-    <h1>Ajustes</h1>
+    <h1 data-tauri-drag-region>Ajustes</h1>
   </header>
 
   <section>
@@ -260,8 +260,9 @@
   .settings {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    padding: 12px 16px;
+    flex: 1;
+    min-height: 0;
+    padding: 0 16px 12px;
   }
 
   header {
@@ -272,6 +273,7 @@
   }
 
   h1 {
+    flex: 1;
     margin: 0;
     font-size: 1.1rem;
     font-weight: 600;

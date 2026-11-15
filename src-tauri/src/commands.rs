@@ -157,6 +157,17 @@ pub fn hide_window(app: AppHandle) {
     window::hide(&app);
 }
 
+/// Fija (no se oculta al perder el foco) o suelta la ventana principal.
+#[tauri::command]
+pub fn set_pinned(app: AppHandle, pinned: bool) {
+    window::set_pinned(&app, pinned);
+}
+
+#[tauri::command]
+pub fn is_pinned(app: AppHandle) -> bool {
+    window::is_pinned(&app)
+}
+
 /// Vista con la que se mostró la ventana por última vez.
 #[tauri::command]
 pub fn current_view(app: AppHandle) -> window::View {

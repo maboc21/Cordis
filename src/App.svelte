@@ -9,11 +9,15 @@
   import type { View } from "./lib/types";
 
   let view = $state<View>("list");
+  /** Fijada: no se oculta al perder el foco (arrastrarla la fija; ver window.rs). */
+  let pinned = $state(false);
 
   onMount(() => {
     void store.load();
     // El `show-view` del arranque llega antes de escuchar: se pregunta.
     api.currentView().then((v) => (view = v), () => {});
+    api.isPinned().then((p) => (pinned = p), () => {});
+    const unlistenPinned = listen<boolean>("pinned-changed", (e) => (pinned = e.payload));
     // Rust avisa cada vez que muestra la ventana y dice qué vista abrir
     // (la bandeja puede pedir Ajustes). De paso se recarga la lista.
     const unlisten = listen<View>("show-view", (e) => {
@@ -25,8 +29,13 @@
     return () => {
       void unlisten.then((f) => f());
       void unlistenTasks.then((f) => f());
+      void unlistenPinned.then((f) => f());
     };
   });
+
+  function togglePinned() {
+    api.setPinned(!pinned).catch((e) => store.fail(e));
+  }
 
   // Esc: en Ajustes vuelve a la lista; en la lista oculta la ventana.
   // Los Esc con significado propio (editar, notas, arrastrar, grabar atajo)
@@ -42,6 +51,17 @@
 <svelte:window onkeydown={onKeydown} />
 
 <main>
+  <!-- Asa para arrastrar la ventana. En Tauri 2 `data-tauri-drag-region`
+       no se hereda: lo lleva cada elemento que debe servir para arrastrar. -->
+  <div
+    class="drag-bar"
+    class:pinned
+    data-tauri-drag-region
+    title={pinned ? "Arrastra para moverla" : "Arrastra para moverla (y que no se oculte al cambiar de ventana)"}
+  >
+    <span class="pill" data-tauri-drag-region></span>
+  </div>
+
   {#if view === "settings"}
     <Settings onBack={() => (view = "list")} />
   {:else}
@@ -51,17 +71,32 @@
       <TaskList />
     </section>
 
-    <footer>
+    <footer data-tauri-drag-region>
       {#if store.error}
         <span class="error" role="alert">{store.error}</span>
       {:else}
-        <span>
+        <span data-tauri-drag-region>
           {store.pending.length}
           {store.pending.length === 1 ? "pendiente" : "pendientes"}
           {#if store.done.length}· {store.done.length} {store.done.length === 1 ? "hecha" : "hechas"}{/if}
         </span>
       {/if}
-      <button class="gear" title="Ajustes" aria-label="Ajustes" onclick={() => (view = "settings")}>
+      <span class="spacer" data-tauri-drag-region></span>
+      <button
+        class="icon"
+        class:active={pinned}
+        title={pinned
+          ? "Fijada: no se oculta al cambiar de ventana. Clic para soltarla"
+          : "Fijar: que no se oculte al cambiar de ventana"}
+        aria-label="Fijar ventana"
+        aria-pressed={pinned}
+        onclick={togglePinned}
+      >
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path d="M6 2h4l-.5 4 2.5 2.5v1H4v-1L6.5 6zM8 9.5V14" />
+        </svg>
+      </button>
+      <button class="icon" title="Ajustes" aria-label="Ajustes" onclick={() => (view = "settings")}>
         <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
           <circle cx="8" cy="8" r="2.2" />
           <path
@@ -80,6 +115,30 @@
     height: 100vh;
   }
 
+  .drag-bar {
+    flex: none;
+    display: grid;
+    place-items: center;
+    height: 14px;
+    cursor: move;
+  }
+
+  .pill {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    transition: background 120ms ease;
+  }
+
+  .drag-bar:hover .pill {
+    background: var(--fg-muted);
+  }
+
+  .drag-bar.pinned .pill {
+    background: var(--accent);
+  }
+
   .scroll {
     flex: 1;
     min-height: 0;
@@ -90,12 +149,17 @@
   footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    gap: 4px;
     padding: 4px 6px 4px 12px;
     font-size: 0.75rem;
     color: var(--fg-muted);
     border-top: 1px solid var(--border);
+    cursor: move;
+  }
+
+  .spacer {
+    flex: 1;
+    align-self: stretch;
   }
 
   footer > span {
@@ -108,7 +172,7 @@
     color: var(--danger);
   }
 
-  .gear {
+  .icon {
     flex: none;
     display: grid;
     place-items: center;
@@ -122,19 +186,24 @@
     cursor: pointer;
   }
 
-  .gear:hover {
+  .icon:hover {
     color: var(--fg);
     background: var(--bg-hover);
   }
 
-  .gear:focus-visible {
+  .icon.active {
+    color: var(--accent);
+  }
+
+  .icon:focus-visible {
     outline: 2px solid var(--accent);
   }
 
-  .gear svg {
+  .icon svg {
     fill: none;
     stroke: currentColor;
     stroke-width: 1.5;
     stroke-linecap: round;
+    stroke-linejoin: round;
   }
 </style>

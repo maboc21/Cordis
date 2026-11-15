@@ -71,6 +71,12 @@ export function installDevMock() {
         return null;
       case "current_view":
         return "list";
+      case "is_pinned":
+        return false;
+      case "set_pinned":
+        // Sin eventos en el navegador: el botón no cambia de aspecto aquí.
+        console.info(`[mock] set_pinned ${a.pinned}`);
+        return null;
       case "hide_window":
         console.info("[mock] hide_window");
         return null;

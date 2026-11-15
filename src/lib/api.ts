@@ -29,6 +29,11 @@ export const reorderTasks = (ids: number[]) => invoke<void>("reorder_tasks", { i
 
 export const hideWindow = () => invoke<void>("hide_window");
 
+/** Fija (no se oculta al perder el foco) o suelta la ventana. */
+export const setPinned = (pinned: boolean) => invoke<void>("set_pinned", { pinned });
+
+export const isPinned = () => invoke<boolean>("is_pinned");
+
 /** Vista con la que Rust mostró la ventana (para la carga inicial). */
 export const currentView = () => invoke<View>("current_view");
 
