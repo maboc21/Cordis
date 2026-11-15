@@ -11,6 +11,8 @@ export interface Task {
   remindAt: number | null;
   /** Ya se ha avisado de `remindAt` (popup). */
   reminded: boolean;
+  /** Va arriba del todo y se destaca. */
+  urgent: boolean;
 }
 
 // Espejo de `commands::SettingsView`.

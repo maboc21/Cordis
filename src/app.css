@@ -9,6 +9,9 @@
   --accent: #3b6ef5;
   --on-accent: #ffffff;
   --danger: #c93636;
+  --urgent: #d9480f;
+  --urgent-bg: #fff3ea;
+  --urgent-bg-hover: #ffe8d6;
   --shadow-drag: 0 4px 14px rgb(0 0 0 / 0.14), 0 0 0 1px var(--border);
 
   color-scheme: light dark;
@@ -31,6 +34,9 @@
     --accent: #6d93ff;
     --on-accent: #10131c;
     --danger: #ff6b6b;
+    --urgent: #ff8a4c;
+    --urgent-bg: #33261f;
+    --urgent-bg-hover: #3d2c23;
     --shadow-drag: 0 4px 16px rgb(0 0 0 / 0.5), 0 0 0 1px var(--border);
   }
 }

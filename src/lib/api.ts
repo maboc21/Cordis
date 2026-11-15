@@ -16,6 +16,9 @@ export const renameTask = (id: number, title: string) =>
 export const setTaskNotes = (id: number, notes: string | null) =>
   invoke<Task>("set_task_notes", { id, notes });
 
+export const setTaskUrgent = (id: number, urgent: boolean) =>
+  invoke<Task>("set_task_urgent", { id, urgent });
+
 export const setTaskDone = (id: number, done: boolean) =>
   invoke<Task>("set_task_done", { id, done });
 

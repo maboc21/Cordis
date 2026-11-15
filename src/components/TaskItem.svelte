@@ -107,6 +107,7 @@
   bind:this={row}
   class="task"
   class:done={task.done}
+  class:urgent={task.urgent && !task.done}
   data-id={task.id}
   role="listitem"
   onkeydown={onRowKey}
@@ -196,6 +197,19 @@
   <div class="actions">
     {#if !task.done}
       <button
+        class="icon urgent-toggle"
+        class:active={task.urgent}
+        title={task.urgent ? "Quitar urgente" : "Marcar como urgente"}
+        aria-label="Urgente"
+        aria-pressed={task.urgent}
+        onclick={() => store.setUrgent(task.id, !task.urgent)}
+      >
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+          <path d="M8 2.5v7" />
+          <circle cx="8" cy="12.8" r="0.4" />
+        </svg>
+      </button>
+      <button
         class="icon"
         class:active={!!task.remindAt && !task.reminded}
         title={reminderOpen ? "Cerrar recordatorio" : "Recordatorio"}
@@ -247,6 +261,30 @@
   .task:hover,
   .task:focus-within {
     background: var(--bg-hover);
+  }
+
+  /* --- Urgente --- */
+
+  .task.urgent {
+    background: var(--urgent-bg);
+    box-shadow: inset 3px 0 0 var(--urgent);
+  }
+
+  .task.urgent:hover,
+  .task.urgent:focus-within {
+    background: var(--urgent-bg-hover);
+  }
+
+  .task.urgent .title {
+    font-weight: 600;
+  }
+
+  .icon.urgent-toggle.active {
+    color: var(--urgent);
+  }
+
+  .icon.urgent-toggle svg {
+    stroke-width: 2.2;
   }
 
   /* --- Arrastre (clases que pone reorder.ts) --- */

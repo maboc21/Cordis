@@ -7,10 +7,12 @@ import type { Task } from "./types";
 
 const ERROR_MS = 5000;
 
-const byPosition = (a: Task, b: Task) => a.position - b.position || a.id - b.id;
+/** Orden de la lista, igual que en Rust: urgentes primero, luego `position`. */
+const byOrder = (a: Task, b: Task) =>
+  Number(b.urgent) - Number(a.urgent) || a.position - b.position || a.id - b.id;
 
 class TaskStore {
-  /** Todas las tareas, ordenadas por `position`. */
+  /** Todas las tareas, en el orden de la lista (`byOrder`). */
   tasks = $state<Task[]>([]);
   loaded = $state(false);
   error = $state<string | null>(null);
@@ -33,17 +35,19 @@ class TaskStore {
 
   async load() {
     try {
-      this.tasks = (await api.listTasks()).sort(byPosition);
+      this.tasks = (await api.listTasks()).sort(byOrder);
       this.loaded = true;
     } catch (e) {
       this.fail(e);
     }
   }
 
-  /** Sustituye una tarea por la versión que devuelve Rust. */
+  /** Sustituye una tarea por la versión que devuelve Rust y reordena (marcar
+   *  urgente cambia su posición). */
   #put(task: Task) {
     const i = this.tasks.findIndex((t) => t.id === task.id);
     if (i >= 0) this.tasks[i] = task;
+    this.tasks.sort(byOrder);
   }
 
   async #call(fn: () => Promise<Task>) {
@@ -76,6 +80,11 @@ class TaskStore {
     return this.#call(() => api.setTaskDone(id, done));
   }
 
+  /** Urgente: sube arriba, debajo de las que ya lo eran (lo decide Rust). */
+  setUrgent(id: number, urgent: boolean) {
+    return this.#call(() => api.setTaskUrgent(id, urgent));
+  }
+
   setReminder(id: number, remindAt: number | null) {
     return this.#call(() => api.setTaskReminder(id, remindAt));
   }
@@ -94,13 +103,18 @@ class TaskStore {
    * Deja `ids` en ese orden. Se aplica al momento (antes del primer `await`,
    * para que la acción de arrastre vea el DOM ya reordenado tras `tick()`)
    * con la misma regla que `db::tasks::reorder`: las tareas se reparten las
-   * posiciones que ya ocupaban.
+   * posiciones que ya ocupaban, y las urgentes quedan siempre delante (una
+   * normal arrastrada entre las urgentes vuelve a su grupo).
    */
   reorder(ids: number[]) {
     const byId = new Map(this.tasks.map((t) => [t.id, t]));
     const slots = ids.map((id) => byId.get(id)!.position).sort((a, b) => a - b);
-    ids.forEach((id, i) => (byId.get(id)!.position = slots[i]));
-    this.tasks.sort(byPosition);
+    const ordered = [
+      ...ids.filter((id) => byId.get(id)!.urgent),
+      ...ids.filter((id) => !byId.get(id)!.urgent),
+    ];
+    ordered.forEach((id, i) => (byId.get(id)!.position = slots[i]));
+    this.tasks.sort(byOrder);
 
     api.reorderTasks(ids).catch((e) => {
       this.fail(e);

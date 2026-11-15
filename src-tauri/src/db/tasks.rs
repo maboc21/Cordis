@@ -2,6 +2,10 @@
 //!
 //! Las funciones reciben la conexión (y `now` cuando lo necesitan) en lugar
 //! de leer el reloj, para poder testearlas de forma determinista.
+//!
+//! **Orden de la lista**: primero las urgentes y luego el resto, cada grupo
+//! por `position` (`ORDER BY urgent DESC, position`). Ver `set_urgent` y
+//! `reorder`, que mantienen ese orden.
 
 use std::collections::HashSet;
 
@@ -24,10 +28,15 @@ pub struct Task {
     pub remind_at: Option<i64>,
     /// Ya se ha avisado de `remind_at` (popup).
     pub reminded: bool,
+    /// Va arriba del todo y se destaca.
+    pub urgent: bool,
 }
 
 const COLUMNS: &str =
-    "id, title, notes, position, done, created_at, completed_at, remind_at, reminded";
+    "id, title, notes, position, done, created_at, completed_at, remind_at, reminded, urgent";
+
+/// Orden de la lista: urgentes primero.
+const ORDER: &str = "urgent DESC, position, id";
 
 fn from_row(r: &Row) -> rusqlite::Result<Task> {
     Ok(Task {
@@ -40,6 +49,7 @@ fn from_row(r: &Row) -> rusqlite::Result<Task> {
         completed_at: r.get(6)?,
         remind_at: r.get(7)?,
         reminded: r.get(8)?,
+        urgent: r.get(9)?,
     })
 }
 
@@ -65,8 +75,7 @@ fn exec_on(conn: &Connection, id: i64, sql: &str, p: impl Params) -> Result<()> 
 
 /// Todas las tareas en el orden de la lista (hechas incluidas).
 pub fn list(conn: &Connection) -> Result<Vec<Task>> {
-    let mut stmt =
-        conn.prepare_cached(&format!("SELECT {COLUMNS} FROM tasks ORDER BY position, id"))?;
+    let mut stmt = conn.prepare_cached(&format!("SELECT {COLUMNS} FROM tasks ORDER BY {ORDER}"))?;
     let tasks = stmt.query_map([], from_row)?.collect::<rusqlite::Result<_>>()?;
     Ok(tasks)
 }
@@ -131,6 +140,32 @@ pub fn delete(conn: &Connection, id: i64) -> Result<()> {
     exec_on(conn, id, "DELETE FROM tasks WHERE id = ?1", [id])
 }
 
+/// Marca o desmarca como urgente y la recoloca:
+/// - al marcarla, queda la **última de las urgentes** (posición mayor que
+///   todas);
+/// - al desmarcarla, queda la **primera de las normales** (posición menor
+///   que todas; puede ser negativa, no importa).
+///
+/// Si ya estaba en ese estado no se mueve.
+pub fn set_urgent(conn: &Connection, id: i64, urgent: bool) -> Result<Task> {
+    let current = get(conn, id)?;
+    if current.urgent == urgent {
+        return Ok(current);
+    }
+    let pos_sql = if urgent {
+        "(SELECT MAX(position) + 1 FROM tasks)"
+    } else {
+        "(SELECT MIN(position) - 1 FROM tasks)"
+    };
+    exec_on(
+        conn,
+        id,
+        &format!("UPDATE tasks SET urgent = ?2, position = {pos_sql} WHERE id = ?1"),
+        params![id, urgent],
+    )?;
+    get(conn, id)
+}
+
 /// Tareas con un recordatorio aún sin avisar (pendientes y no hechas),
 /// por orden de vencimiento. Usa el índice parcial `idx_tasks_pending_reminders`.
 pub fn pending_reminders(conn: &Connection) -> Result<Vec<Task>> {
@@ -163,6 +198,11 @@ pub fn mark_reminded(conn: &mut Connection, ids: &[i64]) -> Result<()> {
 /// repartidas en el nuevo orden. Así se puede reordenar solo un subconjunto
 /// (por ejemplo, las pendientes) sin mover el resto. Todo o nada: si algún id
 /// no existe o está repetido, no se cambia nada.
+///
+/// Las urgentes siempre quedan delante: si el orden pedido mezcla urgentes
+/// y normales, se separan conservando el orden relativo dentro de cada grupo.
+/// Como cada grupo se ordena por `position` por separado, repartir las
+/// posiciones así mantiene la lista tal como se ve.
 pub fn reorder(conn: &mut Connection, ids: &[i64]) -> Result<()> {
     let mut seen = HashSet::with_capacity(ids.len());
     if let Some(dup) = ids.iter().find(|id| !seen.insert(**id)) {
@@ -171,20 +211,24 @@ pub fn reorder(conn: &mut Connection, ids: &[i64]) -> Result<()> {
 
     let tx = conn.transaction()?;
     let mut slots = Vec::with_capacity(ids.len());
+    let mut order: Vec<(bool, i64)> = Vec::with_capacity(ids.len());
     {
-        let mut stmt = tx.prepare("SELECT position FROM tasks WHERE id = ?1")?;
+        let mut stmt = tx.prepare("SELECT position, urgent FROM tasks WHERE id = ?1")?;
         for &id in ids {
-            let pos: i64 = stmt
-                .query_row([id], |r| r.get(0))
+            let (pos, urgent): (i64, bool) = stmt
+                .query_row([id], |r| Ok((r.get(0)?, r.get(1)?)))
                 .optional()?
                 .ok_or(Error::NotFound(id))?;
             slots.push(pos);
+            order.push((urgent, id));
         }
     }
     slots.sort_unstable();
+    // Orden estable: urgentes delante, cada grupo como lo pidió el usuario.
+    order.sort_by_key(|&(urgent, _)| !urgent);
     {
         let mut stmt = tx.prepare("UPDATE tasks SET position = ?2 WHERE id = ?1")?;
-        for (&id, &pos) in ids.iter().zip(&slots) {
+        for (&(_, id), &pos) in order.iter().zip(&slots) {
             stmt.execute(params![id, pos])?;
         }
     }
@@ -220,7 +264,91 @@ mod tests {
         assert_eq!(t.completed_at, None);
         assert_eq!(t.remind_at, None);
         assert!(!t.reminded);
+        assert!(!t.urgent);
         assert_eq!(get(&conn, t.id).unwrap(), t);
+    }
+
+    // --- Urgentes ---
+
+    #[test]
+    fn marcar_urgente_la_sube_arriba() {
+        let conn = open_in_memory().unwrap();
+        let ids = seed(&conn, &["a", "b", "c"]);
+        assert!(set_urgent(&conn, ids[2], true).unwrap().urgent);
+        assert_eq!(titles(&conn), ["c", "a", "b"]);
+    }
+
+    #[test]
+    fn la_nueva_urgente_va_debajo_de_las_que_ya_lo_eran() {
+        let conn = open_in_memory().unwrap();
+        let ids = seed(&conn, &["a", "b", "c", "d"]);
+        set_urgent(&conn, ids[3], true).unwrap();
+        set_urgent(&conn, ids[1], true).unwrap();
+        assert_eq!(titles(&conn), ["d", "b", "a", "c"]);
+        // Aunque la que se marca estuviera antes en la lista.
+        set_urgent(&conn, ids[0], true).unwrap();
+        assert_eq!(titles(&conn), ["d", "b", "a", "c"]);
+        set_urgent(&conn, ids[2], true).unwrap();
+        assert_eq!(titles(&conn), ["d", "b", "a", "c"]);
+    }
+
+    #[test]
+    fn desmarcar_la_deja_la_primera_de_las_normales() {
+        let conn = open_in_memory().unwrap();
+        let ids = seed(&conn, &["a", "b", "c", "d"]);
+        set_urgent(&conn, ids[2], true).unwrap();
+        set_urgent(&conn, ids[3], true).unwrap();
+        assert_eq!(titles(&conn), ["c", "d", "a", "b"]);
+        assert!(!set_urgent(&conn, ids[2], false).unwrap().urgent);
+        assert_eq!(titles(&conn), ["d", "c", "a", "b"]);
+    }
+
+    #[test]
+    fn marcar_dos_veces_no_la_mueve() {
+        let conn = open_in_memory().unwrap();
+        let ids = seed(&conn, &["a", "b", "c"]);
+        set_urgent(&conn, ids[1], true).unwrap();
+        set_urgent(&conn, ids[2], true).unwrap();
+        set_urgent(&conn, ids[1], true).unwrap();
+        assert_eq!(titles(&conn), ["b", "c", "a"]);
+        set_urgent(&conn, ids[0], false).unwrap();
+        assert_eq!(titles(&conn), ["b", "c", "a"]);
+        assert!(matches!(set_urgent(&conn, 999, true), Err(Error::NotFound(999))));
+    }
+
+    #[test]
+    fn las_nuevas_tareas_van_al_final_de_las_normales() {
+        let conn = open_in_memory().unwrap();
+        let ids = seed(&conn, &["a", "b"]);
+        set_urgent(&conn, ids[1], true).unwrap();
+        create(&conn, "c", T0).unwrap();
+        assert_eq!(titles(&conn), ["b", "a", "c"]);
+    }
+
+    #[test]
+    fn reordenar_no_deja_una_normal_por_encima_de_las_urgentes() {
+        let mut conn = open_in_memory().unwrap();
+        let ids = seed(&conn, &["a", "b", "c", "d"]);
+        set_urgent(&conn, ids[2], true).unwrap();
+        set_urgent(&conn, ids[3], true).unwrap();
+        // Se ve: c, d (urgentes), a, b. Se pide poner «b» arriba del todo.
+        reorder(&mut conn, &[ids[1], ids[2], ids[3], ids[0]]).unwrap();
+        assert_eq!(titles(&conn), ["c", "d", "b", "a"]);
+    }
+
+    #[test]
+    fn reordenar_dentro_de_las_urgentes() {
+        let mut conn = open_in_memory().unwrap();
+        let ids = seed(&conn, &["a", "b", "c", "d"]);
+        set_urgent(&conn, ids[2], true).unwrap();
+        set_urgent(&conn, ids[3], true).unwrap();
+        reorder(&mut conn, &[ids[3], ids[2], ids[0], ids[1]]).unwrap();
+        assert_eq!(titles(&conn), ["d", "c", "a", "b"]);
+        // Y las posiciones siguen siendo únicas.
+        let mut pos: Vec<i64> = list(&conn).unwrap().iter().map(|t| t.position).collect();
+        pos.sort_unstable();
+        pos.dedup();
+        assert_eq!(pos.len(), 4);
     }
 
     #[test]

@@ -123,7 +123,7 @@ src-tauri/
 - Fichero: `<app_data_dir>/tareas.db`. En Windows, `%APPDATA%\com.organizadortareas.desktop\tareas.db`.
 - Migraciones en `db/migrations.rs`: cada entrada lleva de la versión `i` a la `i + 1` en su propia transacción. **Nunca edites una migración publicada**; añade otra al final. Si la BD es más nueva que la app, se niega a abrirla (`Error::DbTooNew`).
 - Las funciones de `db::tasks` reciben `&Connection` y `now` como parámetros (no leen el reloj) para que los tests sean deterministas. Los tests usan `db::open_in_memory()`.
-- Comandos disponibles: `list_tasks`, `create_task`, `rename_task`, `set_task_notes`, `set_task_done`, `set_task_reminder`, `delete_task`, `reorder_tasks` (y `app_version`). Los comandos son síncronos: Tauri los ejecuta en el hilo principal, lo cual está bien porque cada consulta tarda microsegundos.
+- Comandos de tareas: `list_tasks`, `create_task`, `rename_task`, `set_task_notes`, `set_task_urgent`, `set_task_done`, `set_task_reminder`, `delete_task`, `reorder_tasks` (y `app_version`). Los comandos son síncronos: Tauri los ejecuta en el hilo principal, lo cual está bien porque cada consulta tarda microsegundos.
 
 ## Decisiones tomadas
 
@@ -132,6 +132,7 @@ src-tauri/
 - **SQLite desde Rust** con `rusqlite` (feature `bundled`, sin depender de la librería del sistema). Una única `Mutex<Connection>` compartida por comandos y planificador, con WAL.
 - **Migraciones** propias con `PRAGMA user_version` (lista de SQL versionada), sin crate extra.
 - **Fechas** como `INTEGER` en ms Unix UTC. Rust solo compara números, así que no se usa `chrono`. La interfaz convierte a hora local.
+- **Urgentes** (migración 2, columna `urgent`): la lista se ordena por `urgent DESC, position` (en Rust, `tasks::ORDER`; en la interfaz, `byOrder`). `set_urgent` recoloca la tarea: al marcarla queda la última de las urgentes (`MAX(position) + 1`) y al desmarcarla, la primera de las normales (`MIN(position) - 1`; las posiciones pueden ser negativas). `reorder` separa urgentes y normales conservando el orden dentro de cada grupo, así que arrastrar no puede mezclarlas. Se destacan con franja naranja, fondo suave y título en negrita (`--urgent*` en `app.css`). En las hechas no se destacan. La copia de seguridad incluye `urgent` (con `serde(default)`, así que las copias antiguas siguen valiendo sin subir `FORMAT_VERSION`).
 - **`position`** entera. Las tareas nuevas van al final (`MAX + 1`). `reorder(ids)` reparte entre esas tareas las mismas posiciones que ya ocupaban, en el nuevo orden: permite reordenar solo las pendientes sin mover las hechas, y es todo o nada (ids repetidos o inexistentes no cambian nada). Puede haber huecos tras borrar; no importa.
 - **Marcar como hecha** guarda `completed_at` (sin pisarlo si ya lo estaba); desmarcar lo borra. La tarea conserva su `position`, así que al desmarcarla vuelve a su sitio.
 - **Cambiar `remind_at`** siempre pone `reminded = 0`.

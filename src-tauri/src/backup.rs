@@ -41,6 +41,9 @@ pub struct BackupTask {
     pub remind_at: Option<i64>,
     #[serde(default)]
     pub reminded: bool,
+    /// Añadido después del formato 1; las copias antiguas no lo traen.
+    #[serde(default)]
+    pub urgent: bool,
 }
 
 /// Todas las tareas, en el orden de la lista, como JSON legible.
@@ -55,6 +58,7 @@ pub fn export(conn: &Connection, now: i64) -> Result<(String, usize)> {
             completed_at: t.completed_at,
             remind_at: t.remind_at,
             reminded: t.reminded,
+            urgent: t.urgent,
         })
         .collect();
     let count = tasks.len();
@@ -101,9 +105,11 @@ pub fn import(conn: &mut Connection, backup: &Backup) -> Result<usize> {
     {
         let mut stmt = tx.prepare(
             "INSERT INTO tasks
-                (title, notes, position, done, created_at, completed_at, remind_at, reminded)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                (title, notes, position, done, created_at, completed_at, remind_at, reminded, urgent)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )?;
+        // La posición es el índice: el orden del array ya es el de la lista
+        // (urgentes primero), así que dentro de cada grupo se conserva.
         for (i, t) in backup.tasks.iter().enumerate() {
             stmt.execute(params![
                 t.title,
@@ -113,7 +119,8 @@ pub fn import(conn: &mut Connection, backup: &Backup) -> Result<usize> {
                 t.created_at,
                 t.completed_at,
                 t.remind_at,
-                t.reminded
+                t.reminded,
+                t.urgent
             ])?;
         }
     }
@@ -136,6 +143,7 @@ mod tests {
         tasks::set_reminder(conn, b, Some(T0 + 5_000)).unwrap();
         tasks::set_done(conn, c, true, T0 + 10).unwrap();
         tasks::reorder(conn, &[c, a, b]).unwrap();
+        tasks::set_urgent(conn, b, true).unwrap();
     }
 
     /// Lo comparable de una tarea, sin id ni posición absoluta.
@@ -157,8 +165,21 @@ mod tests {
         assert_eq!(import(&mut dst, &backup).unwrap(), 3);
 
         assert_eq!(snapshot(&dst), snapshot(&src));
-        let titles: Vec<String> = tasks::list(&dst).unwrap().into_iter().map(|t| t.title).collect();
-        assert_eq!(titles, ["Sacar la basura", "Comprar pan", "Llamar al dentista"]);
+        let list = tasks::list(&dst).unwrap();
+        let titles: Vec<&str> = list.iter().map(|t| t.title.as_str()).collect();
+        assert_eq!(titles, ["Llamar al dentista", "Sacar la basura", "Comprar pan"]);
+        assert!(list[0].urgent);
+    }
+
+    #[test]
+    fn una_copia_sin_urgentes_se_importa_como_no_urgente() {
+        let json = r#"{"app":"organizador-tareas","version":1,"exportedAt":0,
+            "tasks":[{"title":"antigua","createdAt":1}]}"#;
+        let backup = parse(json).unwrap();
+        assert!(!backup.tasks[0].urgent);
+        let mut conn = open_in_memory().unwrap();
+        import(&mut conn, &backup).unwrap();
+        assert!(!tasks::list(&conn).unwrap()[0].urgent);
     }
 
     #[test]

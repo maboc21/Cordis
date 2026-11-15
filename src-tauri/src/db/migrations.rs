@@ -28,6 +28,8 @@ const MIGRATIONS: &[&str] = &[
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
     );",
+    // 2: tareas urgentes (van arriba del todo en la lista).
+    "ALTER TABLE tasks ADD COLUMN urgent INTEGER NOT NULL DEFAULT 0 CHECK (urgent IN (0, 1));",
 ];
 
 /// Versión de esquema que conoce esta build.
@@ -75,6 +77,24 @@ mod tests {
         let mut conn = Connection::open_in_memory().unwrap();
         conn.pragma_update(None, "user_version", (LATEST + 1) as i64).unwrap();
         assert!(matches!(run(&mut conn), Err(Error::DbTooNew { .. })));
+    }
+
+    #[test]
+    fn una_base_v1_con_datos_se_actualiza_sin_perderlos() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        let tx = conn.transaction().unwrap();
+        tx.execute_batch(MIGRATIONS[0]).unwrap();
+        tx.pragma_update(None, "user_version", 1).unwrap();
+        tx.execute("INSERT INTO tasks (title, position, created_at) VALUES ('vieja', 0, 1)", [])
+            .unwrap();
+        tx.commit().unwrap();
+
+        run(&mut conn).unwrap();
+        assert_eq!(current_version(&conn).unwrap(), LATEST);
+        let (title, urgent): (String, bool) = conn
+            .query_row("SELECT title, urgent FROM tasks", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!((title.as_str(), urgent), ("vieja", false));
     }
 
     #[test]

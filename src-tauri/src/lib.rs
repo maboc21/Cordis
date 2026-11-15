@@ -68,6 +68,7 @@ pub fn run() {
             commands::create_task,
             commands::rename_task,
             commands::set_task_notes,
+            commands::set_task_urgent,
             commands::set_task_done,
             commands::set_task_reminder,
             commands::delete_task,

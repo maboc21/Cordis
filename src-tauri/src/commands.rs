@@ -34,6 +34,12 @@ pub fn rename_task(db: State<'_, Db>, id: i64, title: String) -> Result<Task> {
     tasks::rename(&db.lock(), id, &title)
 }
 
+/// Marca o desmarca como urgente (la recoloca: ver `tasks::set_urgent`).
+#[tauri::command]
+pub fn set_task_urgent(db: State<'_, Db>, id: i64, urgent: bool) -> Result<Task> {
+    tasks::set_urgent(&db.lock(), id, urgent)
+}
+
 #[tauri::command]
 pub fn set_task_notes(db: State<'_, Db>, id: i64, notes: Option<String>) -> Result<Task> {
     tasks::set_notes(&db.lock(), id, notes.as_deref())

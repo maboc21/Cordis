@@ -22,10 +22,13 @@ export function installDevMock() {
       completedAt: null,
       remindAt: null,
       reminded: false,
+      urgent: false,
     };
     tasks.set(t.id, t);
     return t;
   };
+
+  const positions = () => [...tasks.values()].map((t) => t.position);
 
   const get = (id: number) => {
     const t = tasks.get(id);
@@ -124,7 +127,15 @@ export function installDevMock() {
         console.info(`[mock] ${cmd}`);
         return null;
       case "list_tasks":
-        return [...tasks.values()].sort((x, y) => x.position - y.position || x.id - y.id);
+        return [...tasks.values()].sort(
+          (x, y) => Number(y.urgent) - Number(x.urgent) || x.position - y.position || x.id - y.id,
+        );
+      case "set_task_urgent": {
+        const t = get(a.id);
+        if (t.urgent === a.urgent) return t;
+        const position = a.urgent ? Math.max(...positions()) + 1 : Math.min(...positions()) - 1;
+        return Object.assign(t, { urgent: a.urgent, position });
+      }
       case "create_task":
         return make(title(a.title));
       case "rename_task":
@@ -148,7 +159,8 @@ export function installDevMock() {
         const ids: number[] = a.ids;
         if (new Set(ids).size !== ids.length) throw "Ids repetidos";
         const slots = ids.map((id) => get(id).position).sort((x, y) => x - y);
-        ids.forEach((id, i) => (get(id).position = slots[i]));
+        const ordered = [...ids.filter((id) => get(id).urgent), ...ids.filter((id) => !get(id).urgent)];
+        ordered.forEach((id, i) => (get(id).position = slots[i]));
         return null;
       }
       default:

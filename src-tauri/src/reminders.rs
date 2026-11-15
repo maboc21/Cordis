@@ -137,6 +137,7 @@ mod tests {
             completed_at: None,
             remind_at,
             reminded: false,
+            urgent: false,
         }
     }
 
