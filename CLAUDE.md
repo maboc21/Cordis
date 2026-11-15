@@ -27,7 +27,7 @@ npm run tauri build -- --bundles appimage,deb     # Linux (solo se puede en Linu
 npm run tauri icon src-tauri/icons/app-icon.svg   # regenerar iconos
 ```
 
-**CI** (`.github/workflows/linux.yml`): en `ubuntu-22.04` (glibc antigua para que el `.AppImage` funcione en más distribuciones) instala los prerrequisitos de Tauri, pasa `svelte-check`, `cargo test` y `clippy -D warnings`, y genera `.AppImage` y `.deb` como artefacto `cordis-linux` (30 días). Se lanza a mano desde la pestaña Actions o al subir una etiqueta `v*`. No publica releases.
+**CI** (`.github/workflows/linux.yml`): en `ubuntu-22.04` (glibc antigua para que el `.AppImage` funcione en más distribuciones) instala los prerrequisitos de Tauri, pasa `svelte-check`, `cargo test` y `clippy -D warnings`, y genera `.AppImage` y `.deb` como artefacto `cordis-linux` (30 días). Se lanza a mano desde la pestaña Actions o al subir una etiqueta `v*`. No publica releases. El artefacto pesa ~80 MB: el `.AppImage` incluye WebKitGTK y GTK; el `.deb` es pequeño porque los toma del sistema.
 
 Tras `tauri icon`, borra lo que genera para Android, iOS, macOS y Microsoft Store (`android/`, `ios/`, `icon.icns`, `Square*Logo.png`, `StoreLogo.png`).
 
@@ -181,6 +181,6 @@ src-tauri/
 | 3 | Interfaz y reordenación | Hecha |
 | 4 | Bandeja, atajo global, single-instance y `--toggle` | Hecha |
 | 5 | Recordatorios | Hecha |
-| 6 | Autoarranque, exportar/importar y empaquetado | Hecha en Windows (.msi). `.AppImage`/`.deb`: workflow de CI preparado, sin ejecutar todavía |
+| 6 | Autoarranque, exportar/importar y empaquetado | Hecha. `.msi` en Windows; `.AppImage`/`.deb` en CI (primera ejecución en verde, ~14 min). Sin probar todavía en un Linux real |
 
 Medidas del build de release en Windows (v0.1.0): ejecutable 4,6 MiB, `.msi` 2,5 MiB. Compilación release completa desde cero: ~3 min.
