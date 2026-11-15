@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guía para trabajar en este repositorio con Claude Code.
+Guía para trabajar en este repositorio con Claude Code. El manual de uso, la instalación y la ubicación de los datos están en [README.md](README.md): si cambias algo visible para el usuario (atajos, botones, ajustes, plataformas), actualízalo también.
 
 > El `CLAUDE.md` de la carpeta padre (`Proyectos/`) es de otro proyecto (El Pueblo Duerme) y **no aplica aquí**.
 
