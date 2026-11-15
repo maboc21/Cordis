@@ -1,0 +1,32 @@
+[package]
+name = "organizador-tareas"
+version = "0.1.0"
+description = "Organizador de tareas ligero de escritorio"
+edition = "2021"
+rust-version = "1.90"
+
+[lib]
+# La lógica vive en la librería para poder testearla con `cargo test`;
+# main.rs solo llama a `run()`.
+name = "organizador_tareas_lib"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+rusqlite = { version = "0.43", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2.4"
+tauri-plugin-notification = "2.8"
+tauri-plugin-single-instance = "2.5"
+# Ya viene con Tauri; solo activamos lo que usa el planificador de recordatorios.
+tokio = { version = "1", default-features = false, features = ["sync", "time", "macros"] }
+
+# Perfil de publicación optimizado para tamaño de binario.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

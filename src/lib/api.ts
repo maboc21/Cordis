@@ -1,0 +1,45 @@
+// Envoltorios tipados de los comandos de Rust (src-tauri/src/commands.rs).
+// La interfaz solo habla con el backend a través de este módulo.
+// Si un comando falla, la promesa se rechaza con un texto en español.
+import { invoke } from "@tauri-apps/api/core";
+import type { Settings, Task, View } from "./types";
+
+export const appVersion = () => invoke<string>("app_version");
+
+export const listTasks = () => invoke<Task[]>("list_tasks");
+
+export const createTask = (title: string) => invoke<Task>("create_task", { title });
+
+export const renameTask = (id: number, title: string) =>
+  invoke<Task>("rename_task", { id, title });
+
+export const setTaskNotes = (id: number, notes: string | null) =>
+  invoke<Task>("set_task_notes", { id, notes });
+
+export const setTaskDone = (id: number, done: boolean) =>
+  invoke<Task>("set_task_done", { id, done });
+
+export const setTaskReminder = (id: number, remindAt: number | null) =>
+  invoke<Task>("set_task_reminder", { id, remindAt });
+
+export const deleteTask = (id: number) => invoke<void>("delete_task", { id });
+
+/** Deja las tareas `ids` en ese orden; las demás no se mueven. */
+export const reorderTasks = (ids: number[]) => invoke<void>("reorder_tasks", { ids });
+
+export const hideWindow = () => invoke<void>("hide_window");
+
+/** Vista con la que Rust mostró la ventana (para la carga inicial). */
+export const currentView = () => invoke<View>("current_view");
+
+export const getSettings = () => invoke<Settings>("get_settings");
+
+/** Registra y guarda el atajo. Si falla, sigue activo el anterior. */
+export const setShortcut = (shortcut: string) =>
+  invoke<Settings>("set_shortcut", { shortcut });
+
+/** Desactiva el atajo mientras se graba uno nuevo. */
+export const suspendShortcut = () => invoke<void>("suspend_shortcut");
+
+/** Vuelve a activar el atajo guardado. */
+export const resumeShortcut = () => invoke<void>("resume_shortcut");

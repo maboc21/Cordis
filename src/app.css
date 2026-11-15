@@ -1,0 +1,69 @@
+:root {
+  --bg: #fbfbfc;
+  --bg-input: #ffffff;
+  --bg-hover: #f1f1f4;
+  --bg-active: #e4e4ea;
+  --fg: #1d1d20;
+  --fg-muted: #6b6b75;
+  --border: #e2e2e7;
+  --accent: #3b6ef5;
+  --on-accent: #ffffff;
+  --danger: #c93636;
+  --shadow-drag: 0 4px 14px rgb(0 0 0 / 0.14), 0 0 0 1px var(--border);
+
+  color-scheme: light dark;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system,
+    "Cantarell", "Ubuntu", sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e22;
+    --bg-input: #28282e;
+    --bg-hover: #26262b;
+    --bg-active: #34343b;
+    --fg: #ececf1;
+    --fg-muted: #9a9aa5;
+    --border: #34343c;
+    --accent: #6d93ff;
+    --on-accent: #10131c;
+    --danger: #ff6b6b;
+    --shadow-drag: 0 4px 16px rgb(0 0 0 / 0.5), 0 0 0 1px var(--border);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+}
+
+/* Barra de desplazamiento discreta. */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-muted);
+}
