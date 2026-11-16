@@ -148,7 +148,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: Cordis ${{ github.ref_name }}
-          files: paquetes/*
+          # Cada artefacto conserva sus carpetas (appimage/, deb/): hay que
+          # buscar también dentro, no solo en la raíz.
+          files: |
+            paquetes/**/*.msi
+            paquetes/**/*.AppImage
+            paquetes/**/*.deb
           fail_on_unmatched_files: true
           body: |
             ## Descargas
