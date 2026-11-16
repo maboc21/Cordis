@@ -1,0 +1,166 @@
+# Compila Cordis para Windows (.msi) y Linux (.AppImage y .deb) y pasa los tests.
+#
+# - A mano (pestaña Actions → «Compilar» → «Run workflow»): deja los paquetes
+#   como artefactos de la ejecución (se guardan 30 días).
+# - Al subir una etiqueta de versión (`git tag v0.2.0 && git push origin v0.2.0`):
+#   además publica una release en GitHub con los tres paquetes adjuntos.
+#   La etiqueta tiene que coincidir con la versión de package.json,
+#   Cargo.toml y tauri.conf.json; si no, falla antes de compilar.
+
+name: Compilar
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar que la etiqueta coincide con la versión
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for v in \
+            "$(node -p "require('./package.json').version")" \
+            "$(node -p "require('./src-tauri/tauri.conf.json').version")" \
+            "$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)"; do
+            if [ "$v" != "$tag" ]; then
+              echo "::error::La etiqueta es v$tag, pero la versión del proyecto es $v"
+              exit 1
+            fi
+          done
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Instalar dependencias de npm
+        run: npm ci
+
+      - name: Tests de Rust
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Compilar .msi
+        run: npm run tauri build -- --bundles msi
+
+      - name: Subir el instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: cordis-windows
+          path: src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 30
+
+  linux:
+    # 22.04 y no la última: el .AppImage enlaza con la glibc del sistema donde
+    # se compila, así que cuanto más antigua, en más distribuciones funciona.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencias del sistema (prerrequisitos de Tauri 2)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential file patchelf \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Instalar dependencias de npm
+        run: npm ci
+
+      - name: Comprobar tipos (svelte-check)
+        run: npm run check
+
+      - name: Tests de Rust
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Compilar .AppImage y .deb
+        run: npm run tauri build -- --bundles appimage,deb
+
+      - name: Subir los paquetes
+        uses: actions/upload-artifact@v4
+        with:
+          name: cordis-linux
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Descargar los paquetes
+        uses: actions/download-artifact@v4
+        with:
+          path: paquetes
+          merge-multiple: true
+
+      - name: Publicar la release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Cordis ${{ github.ref_name }}
+          files: paquetes/*
+          fail_on_unmatched_files: true
+          body: |
+            ## Descargas
+
+            | Sistema | Archivo |
+            |---|---|
+            | **Windows 10 y 11** (64 bits) | `Cordis_*_x64_es-ES.msi` |
+            | **Linux**, cualquier distribución | `Cordis_*_amd64.AppImage` |
+            | **Ubuntu, Debian** y derivadas | `Cordis_*_amd64.deb` |
+
+            **Windows:** abre el `.msi`. Si aparece «Windows protegió su PC», pulsa **Más información** → **Ejecutar de todas formas** (el instalador no está firmado). No hace falta instalar nada más.
+
+            **Linux:** `chmod +x Cordis_*.AppImage` y ábrelo, o `sudo apt install ./Cordis_*.deb`. En GNOME, el icono de la bandeja necesita la extensión AppIndicator.
+
+            El manual de uso está en el [README](https://github.com/${{ github.repository }}#readme).

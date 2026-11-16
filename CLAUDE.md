@@ -27,7 +27,12 @@ npm run tauri build -- --bundles appimage,deb     # Linux (solo se puede en Linu
 npm run tauri icon src-tauri/icons/app-icon.svg   # regenerar iconos
 ```
 
-**CI** (`.github/workflows/linux.yml`): en `ubuntu-22.04` (glibc antigua para que el `.AppImage` funcione en más distribuciones) instala los prerrequisitos de Tauri, pasa `svelte-check`, `cargo test` y `clippy -D warnings`, y genera `.AppImage` y `.deb` como artefacto `cordis-linux` (30 días). Se lanza a mano desde la pestaña Actions o al subir una etiqueta `v*`. No publica releases. El artefacto pesa ~80 MB: el `.AppImage` incluye WebKitGTK y GTK; el `.deb` es pequeño porque los toma del sistema.
+**CI** (`.github/workflows/build.yml`, workflow «Compilar»). Dos trabajos en paralelo y uno de publicación:
+- `windows` (`windows-latest`): `cargo test` y `.msi` → artefacto `cordis-windows`.
+- `linux` (`ubuntu-22.04`, glibc antigua para que el `.AppImage` funcione en más distribuciones): prerrequisitos de Tauri, `svelte-check`, `cargo test`, `clippy -D warnings`, `.AppImage` y `.deb` → artefacto `cordis-linux`.
+- `release`: solo con una etiqueta `v*`. Junta los artefactos y publica la release con `softprops/action-gh-release` (texto de instalación en el propio workflow).
+
+Se lanza a mano desde Actions (solo artefactos, 30 días) o al subir una etiqueta `vX.Y.Z`, que **tiene que coincidir** con la versión de `package.json`, `Cargo.toml` y `tauri.conf.json` (el trabajo de Windows lo comprueba y falla si no). El artefacto `cordis-linux` pesa ~80 MB: el `.AppImage` incluye WebKitGTK y GTK; el `.deb` es pequeño porque los toma del sistema.
 
 Tras `tauri icon`, borra lo que genera para Android, iOS, macOS y Microsoft Store (`android/`, `ios/`, `icon.icns`, `Square*Logo.png`, `StoreLogo.png`).
 
@@ -164,6 +169,7 @@ src-tauri/
 - Wayland: el compositor no deja colocar el popup en la esquina; aparecerá donde decida. Tampoco informa de la posición de la ventana, así que arrastrarla puede no fijarla: hay que usar la chincheta.
 - Windows: con la ventana fijada, el clic en el icono de la bandeja no la oculta (al pulsarlo ya ha perdido el foco); se oculta con Esc o con el atajo.
 - `.AppImage` y `.deb` se generan en Linux; no hay compilación cruzada desde Windows. Para eso está el workflow de GitHub Actions.
+- El `.msi` no está firmado: Windows SmartScreen avisa al abrirlo («Windows protegió su PC»).
 
 ## Forma de trabajar
 

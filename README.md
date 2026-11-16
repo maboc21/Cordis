@@ -8,6 +8,8 @@ Organizador de tareas de escritorio, ligero y solo local. Se abre con un atajo d
 
 ## Instalación
 
+Descarga el paquete de tu sistema desde la [última release](https://github.com/maboc21/Cordis/releases/latest).
+
 ### Windows 10 y 11 (64 bits)
 
 1. Descarga `Cordis_x.y.z_x64_es-ES.msi` y ábrelo.
@@ -17,8 +19,6 @@ Organizador de tareas de escritorio, ligero y solo local. Se abre con un atajo d
 No hace falta instalar nada más. Cordis usa WebView2, que ya viene con Windows 11 y con Windows 10 actualizado; si falta, el instalador lo descarga (en ese caso necesita internet).
 
 ### Linux
-
-Los paquetes se generan con GitHub Actions: pestaña **Actions** → **Linux** → la última ejecución → artefacto `cordis-linux`.
 
 - **AppImage** (cualquier distribución, sin instalar):
   ```bash
@@ -122,6 +122,18 @@ npm run tauri build -- --bundles appimage,deb      # paquetes de Linux (solo en 
 ```
 
 El instalador queda en `src-tauri/target/release/bundle/`.
+
+### Publicar una versión
+
+1. Sube la versión en `package.json`, `src-tauri/Cargo.toml` y `src-tauri/tauri.conf.json` (las tres iguales) y haz commit.
+2. Crea y sube la etiqueta:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+3. El workflow **Compilar** de GitHub Actions compila en Windows y en Linux y publica la release con el `.msi`, el `.AppImage` y el `.deb`. Tarda unos 15 minutos.
+
+Sin etiqueta, el workflow se puede lanzar a mano desde la pestaña **Actions**: compila y deja los paquetes como artefactos, sin publicar nada.
 
 La arquitectura, las decisiones de diseño y las convenciones del código están en [CLAUDE.md](CLAUDE.md).
 
